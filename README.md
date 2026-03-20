@@ -1,5 +1,11 @@
 # Skill-Bridge Career Navigator
 
+🎥 **[Watch the Video Presentation](https://drive.google.com/file/d/1fNGElHl7o5CnxIvw-AoDvFN7fmro8Gxe/view?usp=drive_link)**
+
+🚀 **[Try the Live App](https://skill-bridge-career-navigator-kaczqrtu9jxfbxlywg9miu.streamlit.app/)**
+
+---
+
 ## Candidate Name
 Kartik Khanchi
 
