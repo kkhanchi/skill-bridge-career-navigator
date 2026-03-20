@@ -1,0 +1,709 @@
+[
+  {
+    "name": "Python for Beginners",
+    "skill": "Python",
+    "resource_type": "course",
+    "estimated_hours": 20,
+    "url": "https://example.com/learn-python"
+  },
+  {
+    "name": "Build a Python CLI Tool",
+    "skill": "Python",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/python-cli-project"
+  },
+  {
+    "name": "PCEP Python Certification",
+    "skill": "Python",
+    "resource_type": "certification",
+    "estimated_hours": 30,
+    "url": "https://example.com/python-certification"
+  },
+  {
+    "name": "SQL Fundamentals",
+    "skill": "SQL",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-sql"
+  },
+  {
+    "name": "Build a SQL Analytics Dashboard",
+    "skill": "SQL",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/sql-analytics-project"
+  },
+  {
+    "name": "REST API Design and Development",
+    "skill": "REST APIs",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-rest-apis"
+  },
+  {
+    "name": "Build a RESTful Microservice",
+    "skill": "REST APIs",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/rest-api-project"
+  },
+  {
+    "name": "Git Version Control Mastery",
+    "skill": "Git",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-git"
+  },
+  {
+    "name": "Git Branching Strategies Workshop",
+    "skill": "Git",
+    "resource_type": "project",
+    "estimated_hours": 5,
+    "url": "https://example.com/git-branching-project"
+  },
+  {
+    "name": "JavaScript Complete Guide",
+    "skill": "JavaScript",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-javascript"
+  },
+  {
+    "name": "Build a JavaScript Game",
+    "skill": "JavaScript",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/javascript-game-project"
+  },
+  {
+    "name": "React Front-End Development",
+    "skill": "React",
+    "resource_type": "course",
+    "estimated_hours": 20,
+    "url": "https://example.com/learn-react"
+  },
+  {
+    "name": "Build a React Dashboard App",
+    "skill": "React",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/react-dashboard-project"
+  },
+  {
+    "name": "HTML and Semantic Markup",
+    "skill": "HTML",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-html"
+  },
+  {
+    "name": "Build an Accessible Web Page",
+    "skill": "HTML",
+    "resource_type": "project",
+    "estimated_hours": 6,
+    "url": "https://example.com/html-accessibility-project"
+  },
+  {
+    "name": "CSS Layouts and Responsive Design",
+    "skill": "CSS",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-css"
+  },
+  {
+    "name": "Build a CSS Grid Portfolio",
+    "skill": "CSS",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/css-grid-project"
+  },
+  {
+    "name": "Tailwind CSS Utility-First Styling",
+    "skill": "Tailwind CSS",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-tailwind-css"
+  },
+  {
+    "name": "Build a Tailwind CSS Portfolio Site",
+    "skill": "Tailwind CSS",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/tailwind-portfolio-project"
+  },
+  {
+    "name": "Machine Learning Foundations",
+    "skill": "Machine Learning",
+    "resource_type": "course",
+    "estimated_hours": 30,
+    "url": "https://example.com/learn-machine-learning"
+  },
+  {
+    "name": "ML Model Deployment Project",
+    "skill": "Machine Learning",
+    "resource_type": "project",
+    "estimated_hours": 20,
+    "url": "https://example.com/ml-deployment-project"
+  },
+  {
+    "name": "AWS Machine Learning Specialty",
+    "skill": "Machine Learning",
+    "resource_type": "certification",
+    "estimated_hours": 40,
+    "url": "https://example.com/ml-certification"
+  },
+  {
+    "name": "Data Manipulation with Pandas",
+    "skill": "Pandas",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-pandas"
+  },
+  {
+    "name": "Pandas Data Cleaning Project",
+    "skill": "Pandas",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/pandas-cleaning-project"
+  },
+  {
+    "name": "NumPy for Scientific Computing",
+    "skill": "NumPy",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-numpy"
+  },
+  {
+    "name": "NumPy Array Operations Workshop",
+    "skill": "NumPy",
+    "resource_type": "project",
+    "estimated_hours": 6,
+    "url": "https://example.com/numpy-workshop"
+  },
+  {
+    "name": "Docker Containers Essentials",
+    "skill": "Docker",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-docker"
+  },
+  {
+    "name": "Containerize a Web Application",
+    "skill": "Docker",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/docker-webapp-project"
+  },
+  {
+    "name": "Kubernetes Orchestration",
+    "skill": "Kubernetes",
+    "resource_type": "course",
+    "estimated_hours": 20,
+    "url": "https://example.com/learn-kubernetes"
+  },
+  {
+    "name": "Certified Kubernetes Administrator",
+    "skill": "Kubernetes",
+    "resource_type": "certification",
+    "estimated_hours": 40,
+    "url": "https://example.com/cka-certification"
+  },
+  {
+    "name": "CI/CD Pipeline Fundamentals",
+    "skill": "CI/CD",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-cicd"
+  },
+  {
+    "name": "Build a CI/CD Pipeline from Scratch",
+    "skill": "CI/CD",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/cicd-pipeline-project"
+  },
+  {
+    "name": "Linux System Administration",
+    "skill": "Linux",
+    "resource_type": "course",
+    "estimated_hours": 18,
+    "url": "https://example.com/learn-linux"
+  },
+  {
+    "name": "Linux Foundation Certified SysAdmin",
+    "skill": "Linux",
+    "resource_type": "certification",
+    "estimated_hours": 35,
+    "url": "https://example.com/linux-certification"
+  },
+  {
+    "name": "AWS Cloud Practitioner",
+    "skill": "AWS",
+    "resource_type": "certification",
+    "estimated_hours": 25,
+    "url": "https://example.com/aws-cloud-practitioner"
+  },
+  {
+    "name": "AWS Solutions Architect Course",
+    "skill": "AWS",
+    "resource_type": "course",
+    "estimated_hours": 30,
+    "url": "https://example.com/learn-aws"
+  },
+  {
+    "name": "Deploy a Serverless App on AWS",
+    "skill": "AWS",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/aws-serverless-project"
+  },
+  {
+    "name": "Terraform Infrastructure as Code",
+    "skill": "Terraform",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-terraform"
+  },
+  {
+    "name": "HashiCorp Terraform Associate",
+    "skill": "Terraform",
+    "resource_type": "certification",
+    "estimated_hours": 25,
+    "url": "https://example.com/terraform-certification"
+  },
+  {
+    "name": "TensorFlow Deep Learning",
+    "skill": "TensorFlow",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-tensorflow"
+  },
+  {
+    "name": "TensorFlow Developer Certificate",
+    "skill": "TensorFlow",
+    "resource_type": "certification",
+    "estimated_hours": 35,
+    "url": "https://example.com/tensorflow-certification"
+  },
+  {
+    "name": "Cybersecurity Fundamentals",
+    "skill": "Cybersecurity",
+    "resource_type": "course",
+    "estimated_hours": 20,
+    "url": "https://example.com/learn-cybersecurity"
+  },
+  {
+    "name": "CompTIA Security+ Prep",
+    "skill": "Cybersecurity",
+    "resource_type": "certification",
+    "estimated_hours": 40,
+    "url": "https://example.com/security-plus-certification"
+  },
+  {
+    "name": "Network Security Essentials",
+    "skill": "Network Security",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-network-security"
+  },
+  {
+    "name": "Network Defense Lab Project",
+    "skill": "Network Security",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/network-defense-project"
+  },
+  {
+    "name": "Penetration Testing with Kali Linux",
+    "skill": "Penetration Testing",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-pentesting"
+  },
+  {
+    "name": "OSCP Penetration Testing Certification",
+    "skill": "Penetration Testing",
+    "resource_type": "certification",
+    "estimated_hours": 60,
+    "url": "https://example.com/oscp-certification"
+  },
+  {
+    "name": "SIEM Fundamentals with Splunk",
+    "skill": "SIEM",
+    "resource_type": "course",
+    "estimated_hours": 18,
+    "url": "https://example.com/learn-siem"
+  },
+  {
+    "name": "Build a SIEM Monitoring Dashboard",
+    "skill": "SIEM",
+    "resource_type": "project",
+    "estimated_hours": 14,
+    "url": "https://example.com/siem-dashboard-project"
+  },
+  {
+    "name": "Incident Response Procedures",
+    "skill": "Incident Response",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-incident-response"
+  },
+  {
+    "name": "Incident Response Tabletop Exercise",
+    "skill": "Incident Response",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/incident-response-project"
+  },
+  {
+    "name": "Data Analysis with Python",
+    "skill": "Data Analysis",
+    "resource_type": "course",
+    "estimated_hours": 18,
+    "url": "https://example.com/learn-data-analysis"
+  },
+  {
+    "name": "Exploratory Data Analysis Project",
+    "skill": "Data Analysis",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/eda-project"
+  },
+  {
+    "name": "Tableau Visualization Mastery",
+    "skill": "Tableau",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-tableau"
+  },
+  {
+    "name": "Build a Tableau Sales Dashboard",
+    "skill": "Tableau",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/tableau-dashboard-project"
+  },
+  {
+    "name": "Project Management Professional Prep",
+    "skill": "Project Management",
+    "resource_type": "certification",
+    "estimated_hours": 35,
+    "url": "https://example.com/pmp-certification"
+  },
+  {
+    "name": "Project Management Fundamentals",
+    "skill": "Project Management",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-project-management"
+  },
+  {
+    "name": "Effective Communication for Tech Teams",
+    "skill": "Communication",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-communication"
+  },
+  {
+    "name": "Public Speaking for Engineers",
+    "skill": "Communication",
+    "resource_type": "course",
+    "estimated_hours": 6,
+    "url": "https://example.com/public-speaking-engineers"
+  },
+  {
+    "name": "Agile Methodology in Practice",
+    "skill": "Agile",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-agile"
+  },
+  {
+    "name": "Certified ScrumMaster",
+    "skill": "Agile",
+    "resource_type": "certification",
+    "estimated_hours": 20,
+    "url": "https://example.com/csm-certification"
+  },
+  {
+    "name": "Problem Solving and Critical Thinking",
+    "skill": "Problem Solving",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-problem-solving"
+  },
+  {
+    "name": "Algorithmic Problem Solving Practice",
+    "skill": "Problem Solving",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/problem-solving-practice"
+  },
+  {
+    "name": "TypeScript for JavaScript Developers",
+    "skill": "TypeScript",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-typescript"
+  },
+  {
+    "name": "Build a TypeScript REST API",
+    "skill": "TypeScript",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/typescript-api-project"
+  },
+  {
+    "name": "Node.js Backend Development",
+    "skill": "Node.js",
+    "resource_type": "course",
+    "estimated_hours": 18,
+    "url": "https://example.com/learn-nodejs"
+  },
+  {
+    "name": "Build a Node.js Chat Application",
+    "skill": "Node.js",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/nodejs-chat-project"
+  },
+  {
+    "name": "PostgreSQL Database Administration",
+    "skill": "PostgreSQL",
+    "resource_type": "course",
+    "estimated_hours": 14,
+    "url": "https://example.com/learn-postgresql"
+  },
+  {
+    "name": "PostgreSQL Performance Tuning",
+    "skill": "PostgreSQL",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/postgresql-tuning-project"
+  },
+  {
+    "name": "Redis Caching Strategies",
+    "skill": "Redis",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-redis"
+  },
+  {
+    "name": "Build a Redis Session Store",
+    "skill": "Redis",
+    "resource_type": "project",
+    "estimated_hours": 6,
+    "url": "https://example.com/redis-session-project"
+  },
+  {
+    "name": "PyTorch for Deep Learning",
+    "skill": "PyTorch",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-pytorch"
+  },
+  {
+    "name": "Build a PyTorch Image Classifier",
+    "skill": "PyTorch",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/pytorch-classifier-project"
+  },
+  {
+    "name": "Scikit-learn Machine Learning",
+    "skill": "Scikit-learn",
+    "resource_type": "course",
+    "estimated_hours": 15,
+    "url": "https://example.com/learn-scikit-learn"
+  },
+  {
+    "name": "Scikit-learn Classification Project",
+    "skill": "Scikit-learn",
+    "resource_type": "project",
+    "estimated_hours": 10,
+    "url": "https://example.com/sklearn-classification-project"
+  },
+  {
+    "name": "Deep Learning Specialization",
+    "skill": "Deep Learning",
+    "resource_type": "course",
+    "estimated_hours": 30,
+    "url": "https://example.com/learn-deep-learning"
+  },
+  {
+    "name": "Build a Neural Network from Scratch",
+    "skill": "Deep Learning",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/neural-network-project"
+  },
+  {
+    "name": "FastAPI Web Framework",
+    "skill": "FastAPI",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-fastapi"
+  },
+  {
+    "name": "Build a FastAPI Microservice",
+    "skill": "FastAPI",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/fastapi-microservice-project"
+  },
+  {
+    "name": "Power BI Data Visualization",
+    "skill": "Power BI",
+    "resource_type": "course",
+    "estimated_hours": 12,
+    "url": "https://example.com/learn-power-bi"
+  },
+  {
+    "name": "Bash Scripting for Automation",
+    "skill": "Bash",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-bash"
+  },
+  {
+    "name": "Automate Server Tasks with Bash",
+    "skill": "Bash",
+    "resource_type": "project",
+    "estimated_hours": 6,
+    "url": "https://example.com/bash-automation-project"
+  },
+  {
+    "name": "Jenkins CI/CD Pipelines",
+    "skill": "Jenkins",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-jenkins"
+  },
+  {
+    "name": "Set Up a Jenkins Build Server",
+    "skill": "Jenkins",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/jenkins-server-project"
+  },
+  {
+    "name": "GitHub Actions Workflow Automation",
+    "skill": "GitHub Actions",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-github-actions"
+  },
+  {
+    "name": "Build a GitHub Actions CI Pipeline",
+    "skill": "GitHub Actions",
+    "resource_type": "project",
+    "estimated_hours": 6,
+    "url": "https://example.com/github-actions-project"
+  },
+  {
+    "name": "Leadership for Technical Managers",
+    "skill": "Leadership",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-leadership"
+  },
+  {
+    "name": "Leading Engineering Teams Workshop",
+    "skill": "Leadership",
+    "resource_type": "project",
+    "estimated_hours": 8,
+    "url": "https://example.com/leadership-workshop"
+  },
+  {
+    "name": "Technical Writing for Engineers",
+    "skill": "Technical Writing",
+    "resource_type": "course",
+    "estimated_hours": 8,
+    "url": "https://example.com/learn-technical-writing"
+  },
+  {
+    "name": "Write a Technical Design Document",
+    "skill": "Technical Writing",
+    "resource_type": "project",
+    "estimated_hours": 5,
+    "url": "https://example.com/technical-writing-project"
+  },
+  {
+    "name": "Scrum Framework Deep Dive",
+    "skill": "Scrum",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-scrum"
+  },
+  {
+    "name": "Professional Scrum Master Certification",
+    "skill": "Scrum",
+    "resource_type": "certification",
+    "estimated_hours": 20,
+    "url": "https://example.com/psm-certification"
+  },
+  {
+    "name": "Swift iOS App Development",
+    "skill": "Swift",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-swift"
+  },
+  {
+    "name": "Build an iOS Weather App",
+    "skill": "Swift",
+    "resource_type": "project",
+    "estimated_hours": 15,
+    "url": "https://example.com/swift-weather-project"
+  },
+  {
+    "name": "Kotlin Android Development",
+    "skill": "Kotlin",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-kotlin"
+  },
+  {
+    "name": "Build a Kotlin To-Do App",
+    "skill": "Kotlin",
+    "resource_type": "project",
+    "estimated_hours": 12,
+    "url": "https://example.com/kotlin-todo-project"
+  },
+  {
+    "name": "Azure Fundamentals",
+    "skill": "Azure",
+    "resource_type": "certification",
+    "estimated_hours": 20,
+    "url": "https://example.com/azure-fundamentals"
+  },
+  {
+    "name": "Azure Cloud Services Course",
+    "skill": "Azure",
+    "resource_type": "course",
+    "estimated_hours": 25,
+    "url": "https://example.com/learn-azure"
+  },
+  {
+    "name": "GCP Cloud Engineer",
+    "skill": "GCP",
+    "resource_type": "certification",
+    "estimated_hours": 30,
+    "url": "https://example.com/gcp-cloud-engineer"
+  },
+  {
+    "name": "Google Cloud Platform Essentials",
+    "skill": "GCP",
+    "resource_type": "course",
+    "estimated_hours": 20,
+    "url": "https://example.com/learn-gcp"
+  },
+  {
+    "name": "GraphQL API Development",
+    "skill": "GraphQL",
+    "resource_type": "course",
+    "estimated_hours": 10,
+    "url": "https://example.com/learn-graphql"
+  }
+]

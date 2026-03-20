@@ -1,0 +1,72 @@
+[
+  {
+    "title": "Backend Developer",
+    "description": "Build and maintain scalable server-side applications and RESTful APIs. Work with databases and cloud infrastructure to deliver reliable backend services.",
+    "required_skills": ["Python", "SQL", "REST APIs", "Git"],
+    "preferred_skills": ["Docker", "AWS", "Redis", "PostgreSQL"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Frontend Developer",
+    "description": "Create responsive and accessible user interfaces using modern JavaScript frameworks. Collaborate with designers and backend teams to deliver seamless user experiences.",
+    "required_skills": ["JavaScript", "React", "HTML", "CSS"],
+    "preferred_skills": ["TypeScript", "Tailwind CSS", "Git", "Agile"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Full Stack Developer",
+    "description": "Develop end-to-end web applications spanning frontend UI and backend services. Manage deployments and contribute across the entire technology stack.",
+    "required_skills": ["JavaScript", "Python", "React", "SQL", "REST APIs"],
+    "preferred_skills": ["Docker", "AWS", "Node.js", "TypeScript", "Git"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Data Scientist",
+    "description": "Analyze complex datasets to extract insights and build predictive models. Apply statistical methods and machine learning techniques to solve business problems.",
+    "required_skills": ["Python", "Machine Learning", "Pandas", "NumPy", "SQL"],
+    "preferred_skills": ["TensorFlow", "Scikit-learn", "Data Analysis", "Tableau"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "DevOps Engineer",
+    "description": "Design and manage CI/CD pipelines, container orchestration, and cloud infrastructure. Ensure system reliability, scalability, and automated deployments.",
+    "required_skills": ["Docker", "Kubernetes", "CI/CD", "Linux", "AWS"],
+    "preferred_skills": ["Terraform", "Jenkins", "GitHub Actions", "Git", "Python"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Cloud Architect",
+    "description": "Design and oversee cloud infrastructure strategies across multi-cloud environments. Define architecture standards and guide teams on cloud-native best practices.",
+    "required_skills": ["AWS", "Terraform", "Docker", "Kubernetes", "Linux"],
+    "preferred_skills": ["Azure", "GCP", "CI/CD", "Python", "Communication"],
+    "experience_level": "Senior"
+  },
+  {
+    "title": "Machine Learning Engineer",
+    "description": "Build and deploy machine learning models into production systems. Optimize model performance and integrate ML pipelines with existing infrastructure.",
+    "required_skills": ["Python", "Machine Learning", "TensorFlow", "Docker"],
+    "preferred_skills": ["PyTorch", "Kubernetes", "AWS", "Deep Learning", "FastAPI"],
+    "experience_level": "Senior"
+  },
+  {
+    "title": "Cybersecurity Analyst",
+    "description": "Monitor and protect organizational systems from security threats. Conduct vulnerability assessments, implement security controls, and respond to incidents.",
+    "required_skills": ["Cybersecurity", "Network Security", "Linux", "Python"],
+    "preferred_skills": ["Penetration Testing", "SIEM", "Incident Response", "Bash"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Mobile Developer",
+    "description": "Design and build mobile applications for iOS and Android platforms. Implement responsive UIs, integrate APIs, and ensure smooth cross-platform performance.",
+    "required_skills": ["Swift", "Kotlin", "REST APIs", "Git"],
+    "preferred_skills": ["React", "TypeScript", "CI/CD", "Agile"],
+    "experience_level": "Mid"
+  },
+  {
+    "title": "Project Manager",
+    "description": "Define product vision and roadmap, prioritize features, and coordinate cross-functional teams. Bridge the gap between business goals and technical execution.",
+    "required_skills": ["Project Management", "Communication", "Agile", "Problem Solving"],
+    "preferred_skills": ["Scrum", "Leadership", "Technical Writing", "SQL"],
+    "experience_level": "Senior"
+  }
+]
