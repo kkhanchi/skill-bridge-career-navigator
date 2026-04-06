@@ -9,17 +9,23 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 
 from dotenv import load_dotenv
+from pathlib import Path
 
 from models import CategorizationResult
 
-load_dotenv()
+# Load .env from the same directory as this file
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 logger = logging.getLogger(__name__)
 
 
 def _get_api_key() -> str:
-    """Get GROQ_API_KEY from Streamlit secrets, env var, or .env file."""
-    # Try Streamlit secrets first (for Streamlit Cloud deployment)
+    """Get GROQ_API_KEY from env var / .env file, or Streamlit secrets."""
+    # Try environment variable / .env first (most reliable)
+    key = os.environ.get("GROQ_API_KEY", "").strip()
+    if key:
+        return key
+    # Try Streamlit secrets as fallback (for Streamlit Cloud deployment)
     try:
         import streamlit as st
         key = st.secrets.get("GROQ_API_KEY", "")
@@ -27,8 +33,7 @@ def _get_api_key() -> str:
             return key.strip()
     except Exception:
         pass
-    # Fall back to environment variable / .env
-    return os.environ.get("GROQ_API_KEY", "").strip()
+    return ""
 
 # Keyword-based category mapping for the fallback categorizer
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
@@ -123,12 +128,14 @@ class GroqCategorizer(SkillCategorizerInterface):
     """Uses Groq API (Llama 3.3 70B) for skill categorization with 5-second timeout."""
 
     MODEL = "llama-3.3-70b-versatile"
-    TIMEOUT = 5
+    TIMEOUT = 30
 
     def __init__(self) -> None:
         from groq import Groq
+        api_key = _get_api_key()
+        logger.info("Initializing GroqCategorizer with key: %s...", api_key[:8] if api_key else "NONE")
         self._client = Groq(
-            api_key=_get_api_key(),
+            api_key=api_key,
             timeout=self.TIMEOUT,
         )
         self._fallback = FallbackCategorizer()
