@@ -20,20 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 def _get_api_key() -> str:
-    """Get GROQ_API_KEY from env var / .env file, or Streamlit secrets."""
-    # Try environment variable / .env first (most reliable)
-    key = os.environ.get("GROQ_API_KEY", "").strip()
-    if key:
-        return key
-    # Try Streamlit secrets as fallback (for Streamlit Cloud deployment)
+    """Get GROQ_API_KEY from Streamlit secrets, env var, or .env file."""
+    # Try Streamlit secrets first (for Streamlit Cloud deployment)
     try:
         import streamlit as st
-        key = st.secrets.get("GROQ_API_KEY", "")
-        if key:
-            return key.strip()
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            key = st.secrets["GROQ_API_KEY"]
+            if key and key.strip():
+                return key.strip()
     except Exception:
         pass
-    return ""
+    # Fall back to environment variable / .env
+    return os.environ.get("GROQ_API_KEY", "").strip()
 
 # Keyword-based category mapping for the fallback categorizer
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
