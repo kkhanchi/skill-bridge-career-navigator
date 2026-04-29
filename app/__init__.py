@@ -1,0 +1,1 @@
+"""SkillBridge Flask application package."""
