@@ -79,12 +79,14 @@ def _register_blueprints(app: Flask) -> None:
     from app.api.v1.jobs import bp as jobs_bp
     from app.api.v1.profiles import bp as profiles_bp
     from app.api.v1.resume import bp as resume_bp
+    from app.api.v1.roadmaps import bp as roadmaps_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(profiles_bp, url_prefix="/api/v1/profiles")
     app.register_blueprint(resume_bp, url_prefix="/api/v1/resume")
     app.register_blueprint(jobs_bp, url_prefix="/api/v1/jobs")
     app.register_blueprint(analyses_bp, url_prefix="/api/v1/analyses")
+    app.register_blueprint(roadmaps_bp, url_prefix="/api/v1/roadmaps")
 
 
 def create_app(config_name: str = "dev") -> Flask:
