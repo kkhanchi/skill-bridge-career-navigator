@@ -74,6 +74,7 @@ def _register_blueprints(app: Flask) -> None:
     Blueprints for resume/jobs/analyses/roadmaps are added in
     later stages; this function is extended as they arrive.
     """
+    from app.api.v1.analyses import bp as analyses_bp
     from app.api.v1.health import bp as health_bp
     from app.api.v1.jobs import bp as jobs_bp
     from app.api.v1.profiles import bp as profiles_bp
@@ -83,6 +84,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(profiles_bp, url_prefix="/api/v1/profiles")
     app.register_blueprint(resume_bp, url_prefix="/api/v1/resume")
     app.register_blueprint(jobs_bp, url_prefix="/api/v1/jobs")
+    app.register_blueprint(analyses_bp, url_prefix="/api/v1/analyses")
 
 
 def create_app(config_name: str = "dev") -> Flask:
