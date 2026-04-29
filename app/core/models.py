@@ -47,7 +47,13 @@ class CategorizationResult:
 
 @dataclass
 class LearningResource:
-    """A single learning resource mapped to a skill."""
+    """A single learning resource mapped to a skill.
+
+    ``id`` is an optional UUID assigned by ``generate_roadmap`` so the
+    API can PATCH individual resources by stable identifier. Legacy
+    callers (the Streamlit UI and fixtures) omit it; the default empty
+    string preserves backward compatibility.
+    """
 
     name: str
     skill: str
@@ -55,6 +61,7 @@ class LearningResource:
     estimated_hours: int
     url: str
     completed: bool = False
+    id: str = ""
 
 
 @dataclass

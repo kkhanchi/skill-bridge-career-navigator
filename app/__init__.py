@@ -18,6 +18,7 @@ from uuid import uuid4
 from flask import Flask, g, request
 
 from app.config import CONFIG_MAP
+from app.extensions import init_extensions
 from app.utils.errors import register_error_handlers
 from app.utils.logging import configure_logging
 
@@ -97,7 +98,7 @@ def create_app(config_name: str = "dev") -> Flask:
     app.config.from_object(CONFIG_MAP[config_name])
 
     configure_logging(app)
-    # init_extensions(app) is wired in Stage C once repositories exist.
+    init_extensions(app)
     register_error_handlers(app)
     _register_request_hooks(app)
     _register_blueprints(app)
