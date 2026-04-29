@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+from uuid import uuid4
 
 from .models import (
     GapResult,
@@ -90,6 +91,7 @@ def generate_roadmap(
                         estimated_hours=r.estimated_hours,
                         url=r.url,
                         completed=False,
+                        id=uuid4().hex,
                     )
                 )
         else:
@@ -102,6 +104,7 @@ def generate_roadmap(
                     estimated_hours=10,
                     url=f"https://example.com/learn-{skill.lower().replace(' ', '-')}",
                     completed=False,
+                    id=uuid4().hex,
                 )
             )
 
@@ -109,7 +112,11 @@ def generate_roadmap(
 
 
 def mark_completed(roadmap: Roadmap, resource_name: str) -> Roadmap:
-    """Return a new Roadmap with the named resource marked as completed."""
+    """Return a new Roadmap with the named resource marked as completed.
+
+    Preserves each resource's ``id`` so repository-level indexes built
+    from the original roadmap remain valid against the returned copy.
+    """
     new_phases: list[RoadmapPhase] = []
     for phase in roadmap.phases:
         new_resources: list[LearningResource] = []
@@ -121,9 +128,52 @@ def mark_completed(roadmap: Roadmap, resource_name: str) -> Roadmap:
                 estimated_hours=r.estimated_hours,
                 url=r.url,
                 completed=r.completed or (r.name == resource_name),
+                id=r.id,
             )
             new_resources.append(new_r)
         new_phases.append(RoadmapPhase(label=phase.label, resources=new_resources))
+    return Roadmap(phases=new_phases)
+
+
+def mark_completed_by_id(roadmap: Roadmap, resource_id: str) -> Roadmap:
+    """Return a new Roadmap with the resource identified by ``resource_id`` completed.
+
+    The API layer uses this for ``PATCH /roadmaps/{id}/resources/{rid}``
+    where resources are addressed by their stable uuid id rather than
+    human-readable name (multiple resources can share a name).
+
+    Raises:
+        KeyError: if no resource in ``roadmap`` has the given id.
+    """
+    found = False
+    new_phases: list[RoadmapPhase] = []
+    for phase in roadmap.phases:
+        new_resources: list[LearningResource] = []
+        for r in phase.resources:
+            if r.id == resource_id:
+                found = True
+                new_resources.append(LearningResource(
+                    name=r.name,
+                    skill=r.skill,
+                    resource_type=r.resource_type,
+                    estimated_hours=r.estimated_hours,
+                    url=r.url,
+                    completed=True,
+                    id=r.id,
+                ))
+            else:
+                new_resources.append(LearningResource(
+                    name=r.name,
+                    skill=r.skill,
+                    resource_type=r.resource_type,
+                    estimated_hours=r.estimated_hours,
+                    url=r.url,
+                    completed=r.completed,
+                    id=r.id,
+                ))
+        new_phases.append(RoadmapPhase(label=phase.label, resources=new_resources))
+    if not found:
+        raise KeyError(f"No resource with id {resource_id!r} in roadmap")
     return Roadmap(phases=new_phases)
 
 
