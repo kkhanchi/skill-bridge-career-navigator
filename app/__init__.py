@@ -71,11 +71,14 @@ def _register_blueprints(app: Flask) -> None:
 
     Resource blueprints land under ``/api/v1/<resource>`` (R9.1).
     ``/health`` is served at the unversioned path (R8.3, R9.2).
-    Blueprints for profiles/resume/jobs/analyses/roadmaps are added in
+    Blueprints for resume/jobs/analyses/roadmaps are added in
     later stages; this function is extended as they arrive.
     """
     from app.api.v1.health import bp as health_bp
+    from app.api.v1.profiles import bp as profiles_bp
+
     app.register_blueprint(health_bp)
+    app.register_blueprint(profiles_bp, url_prefix="/api/v1/profiles")
 
 
 def create_app(config_name: str = "dev") -> Flask:

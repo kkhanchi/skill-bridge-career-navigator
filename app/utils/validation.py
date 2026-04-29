@@ -24,11 +24,15 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _raise_validation_error(err: ValidationError) -> None:
+    # ``include_context=False`` strips Pydantic's internal ``ctx`` dict
+    # which can contain non-JSON-serializable objects (e.g. the raw
+    # ValueError instance when a model_validator raises). The returned
+    # structure is still informative: type / loc / msg / input.
     raise ApiError(
         code=VALIDATION_FAILED,
         message="Request validation failed",
         status=400,
-        details={"errors": err.errors(include_url=False)},
+        details={"errors": err.errors(include_url=False, include_context=False)},
     )
 
 
