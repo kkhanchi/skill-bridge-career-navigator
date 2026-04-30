@@ -93,11 +93,11 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          # The Dockerfile lives inside skill-bridge/, and its
-          # COPY instructions expect that directory as the build
-          # context.
-          context: skill-bridge
-          file: skill-bridge/Dockerfile
+          # The Dockerfile + source live at the repo root (the git
+          # repo is skill-bridge/ itself, not a parent wrapping it).
+          # Both paths are relative to the checked-out repo root.
+          context: .
+          file: Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
