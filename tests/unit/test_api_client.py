@@ -647,3 +647,308 @@ class TestErrorHierarchy:
                 raise exc
             except ApiError as caught:
                 assert caught is exc
+
+
+# =====================================================================
+# Happy-path tests for all 16 endpoint methods (R2.1 – R2.16)
+# =====================================================================
+
+
+class TestAuthEndpoints:
+    """R2.1 – R2.5. Auth surface: register, login, refresh, logout, me."""
+
+    @responses.activate
+    def test_register_returns_tokens_and_user(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/auth/register",
+            json={
+                "user": {"id": "u1", "email": "e@x.com", "created_at": "2026-04-30T00:00:00Z"},
+                "access": "a1",
+                "refresh": "r1",
+            },
+            status=201,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        result = client.register("e@x.com", "correct horse battery staple")
+        assert result["access"] == "a1"
+        assert result["refresh"] == "r1"
+        assert result["user"]["email"] == "e@x.com"
+        # Request body echoes the call args.
+        import json
+
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"email": "e@x.com", "password": "correct horse battery staple"}
+
+    @responses.activate
+    def test_login_returns_tokens_and_user(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/auth/login",
+            json={"user": {"id": "u1", "email": "e@x.com"}, "access": "a", "refresh": "r"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        result = client.login("e@x.com", "pwd")
+        assert result["access"] == "a"
+
+    @responses.activate
+    def test_refresh_rotates_tokens(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/auth/refresh",
+            json={"access": "new_a", "refresh": "new_r"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("old_a", "old_r")
+        result = client.refresh()
+        # Client returns the new pair.
+        assert result == {"access": "new_a", "refresh": "new_r"}
+        # And mutates internal state.
+        assert client.tokens == ("new_a", "new_r")
+
+    @responses.activate
+    def test_logout_returns_none_on_204(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/auth/logout",
+            status=204,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        assert client.logout() is None
+
+    def test_logout_with_no_refresh_token_is_noop(self) -> None:
+        # No network call, no exception — just returns. Idempotent
+        # with the UI's _handle_logout clearing local state anyway.
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        assert client.logout() is None
+
+    @responses.activate
+    def test_me_returns_user(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/auth/me",
+            json={"user": {"id": "u1", "email": "e@x.com", "created_at": "2026-04-30T00:00:00Z"}},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.me()
+        assert result["user"]["id"] == "u1"
+        # Authorization header was sent.
+        assert responses.calls[0].request.headers["Authorization"] == "Bearer a"
+
+
+class TestPublicReads:
+    """R2.6 – R2.8. Public endpoints: jobs list, job detail, resume parse."""
+
+    @responses.activate
+    def test_list_jobs_with_filters(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/jobs",
+            json={
+                "items": [{"id": "j1", "title": "Engineer"}],
+                "meta": {"page": 1, "limit": 20, "total": 1, "pages": 1},
+            },
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        result = client.list_jobs(keyword="py", skill="python")
+        assert result["items"][0]["id"] == "j1"
+        # Query params threaded through.
+        sent_url = responses.calls[0].request.url
+        assert "keyword=py" in sent_url
+        assert "skill=python" in sent_url
+
+    @responses.activate
+    def test_list_jobs_without_filters_sends_no_params(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/jobs",
+            json={"items": [], "meta": {"page": 1, "limit": 20, "total": 0, "pages": 0}},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.list_jobs()
+        # Base URL with no query string.
+        assert responses.calls[0].request.url == f"{CANONICAL}/api/v1/jobs"
+
+    @responses.activate
+    def test_get_job(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/jobs/j1",
+            json={"id": "j1", "title": "Engineer"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        result = client.get_job("j1")
+        assert result["id"] == "j1"
+
+    @responses.activate
+    def test_parse_resume(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/resume/parse",
+            json={"skills": ["python", "flask"]},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        result = client.parse_resume("I know Python and Flask")
+        assert result["skills"] == ["python", "flask"]
+        import json
+
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"text": "I know Python and Flask"}
+
+
+class TestProfileEndpoints:
+    """R2.9 – R2.12. Profile CRUD."""
+
+    @responses.activate
+    def test_create_profile(self) -> None:
+        payload = {
+            "name": "Alice",
+            "skills": ["python"],
+            "experience_years": 3,
+            "education": "Bachelor's",
+            "target_role": "Backend Engineer",
+        }
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/profiles",
+            json={"id": "p1", **payload},
+            status=201,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.create_profile(payload)
+        assert result["id"] == "p1"
+
+    @responses.activate
+    def test_get_profile(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/profiles/p1",
+            json={"id": "p1", "name": "Alice"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        assert client.get_profile("p1")["id"] == "p1"
+
+    @responses.activate
+    def test_update_profile(self) -> None:
+        responses.add(
+            responses.PATCH,
+            f"{CANONICAL}/api/v1/profiles/p1",
+            json={"id": "p1", "name": "Alice Updated"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.update_profile("p1", {"name": "Alice Updated"})
+        assert result["name"] == "Alice Updated"
+
+    @responses.activate
+    def test_delete_profile_returns_none_on_204(self) -> None:
+        responses.add(
+            responses.DELETE,
+            f"{CANONICAL}/api/v1/profiles/p1",
+            status=204,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        assert client.delete_profile("p1") is None
+
+
+class TestAnalysisEndpoints:
+    """R2.13 – R2.14. Gap analysis CRUD."""
+
+    @responses.activate
+    def test_create_analysis(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/analyses",
+            json={"id": "an1", "profile_id": "p1", "job_id": "j1"},
+            status=201,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.create_analysis("p1", "j1")
+        assert result["id"] == "an1"
+        import json
+
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"profile_id": "p1", "job_id": "j1"}
+
+    @responses.activate
+    def test_get_analysis(self) -> None:
+        responses.add(
+            responses.GET,
+            f"{CANONICAL}/api/v1/analyses/an1",
+            json={"id": "an1", "profile_id": "p1"},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        assert client.get_analysis("an1")["id"] == "an1"
+
+
+class TestRoadmapEndpoints:
+    """R2.15 – R2.16. Roadmap create + resource toggle."""
+
+    @responses.activate
+    def test_create_roadmap(self) -> None:
+        responses.add(
+            responses.POST,
+            f"{CANONICAL}/api/v1/roadmaps",
+            json={"id": "rm1", "analysis_id": "an1", "phases": []},
+            status=201,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.create_roadmap("an1")
+        assert result["id"] == "rm1"
+        import json
+
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"analysis_id": "an1"}
+
+    @responses.activate
+    def test_update_roadmap_resource(self) -> None:
+        responses.add(
+            responses.PATCH,
+            f"{CANONICAL}/api/v1/roadmaps/rm1/resources/res1",
+            json={"id": "rm1", "phases": [{"resources": [{"id": "res1", "completed": True}]}]},
+            status=200,
+        )
+        client = ApiClient(base_url=BASE)
+        _warm(client)
+        client.set_tokens("a", "r")
+        result = client.update_roadmap_resource("rm1", "res1", completed=True)
+        assert result["phases"][0]["resources"][0]["completed"] is True
+        import json
+
+        sent = json.loads(responses.calls[0].request.body)
+        assert sent == {"completed": True}

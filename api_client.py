@@ -179,10 +179,10 @@ class RateLimitedError(ApiError):
 class ApiClient:
     """HTTP client for the SkillBridge REST API.
 
-    Stage A ships this class as a skeleton: all method signatures are
-    in place and raise :class:`NotImplementedError` so the typed call
-    sites in ``app.py`` can compile, but no method has behaviour yet.
-    Stages B and C fill in the internals and the 16 public endpoints.
+    The class talks to the Flask API over HTTP via a pooled
+    :class:`requests.Session`, exposes one method per Phase 1–3
+    endpoint, and handles reactive token refresh + cold-start warmup
+    transparently.
 
     The class deliberately does not import or reference ``streamlit``
     at module load — ``_resolve_base_url`` does an optional import
@@ -304,15 +304,35 @@ class ApiClient:
 
     def register(self, email: str, password: str) -> dict[str, Any]:
         """``POST /api/v1/auth/register`` (public). See R2.1."""
-        raise NotImplementedError("ApiClient.register — Stage C")
+        body = self._request(
+            "POST",
+            "/api/v1/auth/register",
+            authed=False,
+            json={"email": email, "password": password},
+        )
+        assert body is not None  # 201 never returns an empty body
+        return body
 
     def login(self, email: str, password: str) -> dict[str, Any]:
         """``POST /api/v1/auth/login`` (public). See R2.2."""
-        raise NotImplementedError("ApiClient.login — Stage C")
+        body = self._request(
+            "POST",
+            "/api/v1/auth/login",
+            authed=False,
+            json={"email": email, "password": password},
+        )
+        assert body is not None
+        return body
 
     def refresh(self) -> dict[str, Any]:
-        """``POST /api/v1/auth/refresh`` using stored refresh token. See R2.3."""
-        raise NotImplementedError("ApiClient.refresh — Stage C")
+        """``POST /api/v1/auth/refresh`` using stored refresh token. See R2.3.
+
+        Delegates to :meth:`_do_refresh` which performs the call and
+        mutates stored tokens; we just return the current token pair
+        so the caller (``app.py``) can persist it to ``st.session_state``.
+        """
+        self._do_refresh()
+        return {"access": self._access, "refresh": self._refresh}
 
     def logout(self, timeout: float | None = None) -> None:
         """``POST /api/v1/auth/logout`` using stored refresh token.
@@ -320,14 +340,30 @@ class ApiClient:
         Best-effort server-side revocation. The UI's ``_handle_logout``
         clears local session state regardless of outcome (R5.7). The
         ``timeout`` kwarg exists so the UI can pass ``timeout=2.0`` to
-        avoid a 10-second hang on a dead API (design §Error Handling
-        / Network errors in logout). See R2.4.
+        avoid a 10-second hang on a dead API. See R2.4.
+
+        Authed=False here because Phase 3's logout only needs the
+        refresh token in the body, not a valid access token. A user
+        whose access token has expired can still log out.
         """
-        raise NotImplementedError("ApiClient.logout — Stage C")
+        if not self._refresh:
+            # Nothing to revoke server-side; the UI still wipes local
+            # state. Return silently rather than raising — logout on
+            # an already-logged-out client is a no-op.
+            return
+        self._request(
+            "POST",
+            "/api/v1/auth/logout",
+            authed=False,
+            json={"refresh": self._refresh},
+            timeout=timeout,
+        )
 
     def me(self) -> dict[str, Any]:
         """``GET /api/v1/auth/me`` (authed). See R2.5."""
-        raise NotImplementedError("ApiClient.me — Stage C")
+        body = self._request("GET", "/api/v1/auth/me", authed=True)
+        assert body is not None
+        return body
 
     # ---------------------------------------------------------------
     # Public reads (R2.6–R2.8)
@@ -338,40 +374,99 @@ class ApiClient:
         keyword: str | None = None,
         skill: str | None = None,
     ) -> dict[str, Any]:
-        """``GET /api/v1/jobs`` with optional filters. See R2.6."""
-        raise NotImplementedError("ApiClient.list_jobs — Stage C")
+        """``GET /api/v1/jobs`` with optional filters. See R2.6.
+
+        Returns the full ``{"items": [...], "meta": {...}}`` envelope
+        straight from Phase 1's ``JobListResponse`` shape so the UI
+        can paginate if it grows to.
+        """
+        params: dict[str, Any] = {}
+        if keyword:
+            params["keyword"] = keyword
+        if skill:
+            params["skill"] = skill
+        body = self._request(
+            "GET",
+            "/api/v1/jobs",
+            authed=False,
+            params=params or None,
+        )
+        assert body is not None
+        return body
 
     def get_job(self, job_id: str) -> dict[str, Any]:
         """``GET /api/v1/jobs/{job_id}``. See R2.7."""
-        raise NotImplementedError("ApiClient.get_job — Stage C")
+        body = self._request("GET", f"/api/v1/jobs/{job_id}", authed=False)
+        assert body is not None
+        return body
 
     def parse_resume(self, text: str) -> dict[str, Any]:
         """``POST /api/v1/resume/parse`` (public). See R2.8."""
-        raise NotImplementedError("ApiClient.parse_resume — Stage C")
+        body = self._request(
+            "POST",
+            "/api/v1/resume/parse",
+            authed=False,
+            json={"text": text},
+        )
+        assert body is not None
+        return body
 
     # ---------------------------------------------------------------
     # Profiles (R2.9–R2.12)
     # ---------------------------------------------------------------
 
     def create_profile(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """``POST /api/v1/profiles`` (authed). See R2.9."""
-        raise NotImplementedError("ApiClient.create_profile — Stage C")
+        """``POST /api/v1/profiles`` (authed). See R2.9.
+
+        Payload keys: ``name``, ``skills``, ``experience_years``,
+        ``education``, ``target_role`` (Phase 1 :class:`ProfileCreate`).
+        """
+        body = self._request(
+            "POST",
+            "/api/v1/profiles",
+            authed=True,
+            json=payload,
+        )
+        assert body is not None
+        return body
 
     def get_profile(self, profile_id: str) -> dict[str, Any]:
         """``GET /api/v1/profiles/{profile_id}`` (authed). See R2.10."""
-        raise NotImplementedError("ApiClient.get_profile — Stage C")
+        body = self._request(
+            "GET",
+            f"/api/v1/profiles/{profile_id}",
+            authed=True,
+        )
+        assert body is not None
+        return body
 
     def update_profile(
         self,
         profile_id: str,
         patch: dict[str, Any],
     ) -> dict[str, Any]:
-        """``PATCH /api/v1/profiles/{profile_id}`` (authed). See R2.11."""
-        raise NotImplementedError("ApiClient.update_profile — Stage C")
+        """``PATCH /api/v1/profiles/{profile_id}`` (authed). See R2.11.
+
+        Patch keys are any subset of :class:`ProfileUpdate`:
+        ``name``, ``experience_years``, ``education``, ``target_role``,
+        ``added_skills``, ``removed_skills``.
+        """
+        body = self._request(
+            "PATCH",
+            f"/api/v1/profiles/{profile_id}",
+            authed=True,
+            json=patch,
+        )
+        assert body is not None
+        return body
 
     def delete_profile(self, profile_id: str) -> None:
         """``DELETE /api/v1/profiles/{profile_id}`` (authed, 204). See R2.12."""
-        raise NotImplementedError("ApiClient.delete_profile — Stage C")
+        self._request(
+            "DELETE",
+            f"/api/v1/profiles/{profile_id}",
+            authed=True,
+        )
 
     # ---------------------------------------------------------------
     # Analyses (R2.13–R2.14)
@@ -379,11 +474,24 @@ class ApiClient:
 
     def create_analysis(self, profile_id: str, job_id: str) -> dict[str, Any]:
         """``POST /api/v1/analyses`` (authed). See R2.13."""
-        raise NotImplementedError("ApiClient.create_analysis — Stage C")
+        body = self._request(
+            "POST",
+            "/api/v1/analyses",
+            authed=True,
+            json={"profile_id": profile_id, "job_id": job_id},
+        )
+        assert body is not None
+        return body
 
     def get_analysis(self, analysis_id: str) -> dict[str, Any]:
         """``GET /api/v1/analyses/{analysis_id}`` (authed). See R2.14."""
-        raise NotImplementedError("ApiClient.get_analysis — Stage C")
+        body = self._request(
+            "GET",
+            f"/api/v1/analyses/{analysis_id}",
+            authed=True,
+        )
+        assert body is not None
+        return body
 
     # ---------------------------------------------------------------
     # Roadmaps (R2.15–R2.16)
@@ -391,7 +499,14 @@ class ApiClient:
 
     def create_roadmap(self, analysis_id: str) -> dict[str, Any]:
         """``POST /api/v1/roadmaps`` (authed). See R2.15."""
-        raise NotImplementedError("ApiClient.create_roadmap — Stage C")
+        body = self._request(
+            "POST",
+            "/api/v1/roadmaps",
+            authed=True,
+            json={"analysis_id": analysis_id},
+        )
+        assert body is not None
+        return body
 
     def update_roadmap_resource(
         self,
@@ -403,7 +518,14 @@ class ApiClient:
 
         Authed. See R2.16.
         """
-        raise NotImplementedError("ApiClient.update_roadmap_resource — Stage C")
+        body = self._request(
+            "PATCH",
+            f"/api/v1/roadmaps/{roadmap_id}/resources/{resource_id}",
+            authed=True,
+            json={"completed": completed},
+        )
+        assert body is not None
+        return body
 
     # ---------------------------------------------------------------
     # Internals (Stage B)
