@@ -1,0 +1,28 @@
+Alembic migrations for SkillBridge.
+
+Layout
+======
+
+- env.py            — runtime entry point; pulls DATABASE_URL from
+                       CONFIG_MAP[APP_ENV].DATABASE_URL at runtime.
+- script.py.mako    — template for generated migration files.
+- versions/         — one file per migration, applied in order.
+
+Common commands
+===============
+
+Apply all pending migrations against the current APP_ENV:
+
+    APP_ENV=dev alembic upgrade head
+
+Generate a new migration after editing app/db/models.py (hand-review
+the output before committing):
+
+    APP_ENV=dev alembic revision --autogenerate -m "short description"
+
+Roll back one migration:
+
+    APP_ENV=dev alembic downgrade -1
+
+See .kiro/specs/phase-2-persistence/design.md §Alembic Setup and
+decisions/ADR-008-alembic-workflow.md for the full workflow.
