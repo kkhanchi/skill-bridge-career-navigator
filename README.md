@@ -94,8 +94,49 @@ pytest tests/ -v
 
 ---
 
-## Phase 2 — Persistence (current)
+## Phase 3 — Authentication & Authorization (current)
 
+Phase 3 turns SkillBridge into a multi-user system. Every profile, analysis, and roadmap is now owned by exactly one user; cross-tenant reads and writes return 404 (ADR-015 anti-enumeration). Authentication is JWT-based with short-lived stateless access tokens and stateful rotating refresh tokens.
+
+**What shipped in Phase 3:**
+- 5 new endpoints under `/api/v1/auth/*`:
+  - `POST /register` — 201 with `{user, access, refresh}`, 409 on duplicate email
+  - `POST /login` — 200 with `{user, access, refresh}`; constant-time verify on the unknown-email branch closes the account-enumeration timing side channel
+  - `POST /refresh` — 200 with a fresh `{access, refresh}` pair; presenting the same refresh twice returns 401 (rotation is one-shot)
+  - `POST /logout` — 204, idempotent; revokes the refresh's jti but leaves the access token alone until its natural 15-min expiry
+  - `GET /me` — 200 with the current user's public projection
+- `@require_auth` decorator on every `/api/v1/profiles`, `/analyses`, `/roadmaps` handler; handlers receive a `current_user` kwarg and scope every repo call through `*_for_user` variants (ADR-014 — additive extension keeps the 157 prior tests green)
+- Argon2id password hashing via `argon2-cffi` with config-driven cost parameters (ADR-012)
+- Per-IP rate limits on auth endpoints — register 5/hour, login 10/minute, refresh 30/minute — via `flask-limiter` in in-memory storage (ADR-016)
+- CORS configured via `CORS_ORIGINS` env var — prod requires explicit origins, dev defaults to `*` (ADR-017)
+- Migrations 0002 (flip `profiles.user_id` / `analyses.user_id` to NOT NULL + CASCADE) and 0003 (new `refresh_tokens` table)
+- 268 tests total: +63 new Phase 3 tests including an auth integration suite, multi-tenant isolation suite, rate-limit suite, and 5 new Hypothesis property tests (refresh rotation one-shot, logout idempotency, access-TTL invariant, multi-tenant stateful machine, envelope closure)
+
+### Environment variables
+
+| Var | Required in | Default | Notes |
+|-----|-------------|---------|-------|
+| `JWT_SECRET` | **prod** | dev literal | `init_extensions` raises RuntimeError in prod if empty. Dev falls back to `"dev-secret-do-not-use-in-prod"` with a startup warning. |
+| `CORS_ORIGINS` | no | `""` in prod, `"*"` in dev | Empty disables CORS entirely. CSV for an exact-match allowlist. |
+| `ACCESS_TTL_SECONDS` | no | 900 (15 min) | Access token lifetime. |
+| `REFRESH_TTL_SECONDS` | no | 1_209_600 (14 days) | Refresh token lifetime. |
+| `ARGON2_TIME_COST` | no | 2 | See [OWASP's argon2 guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) to tune for prod. |
+| `ARGON2_MEMORY_COST` | no | 65536 (KiB) | |
+| `ARGON2_PARALLELISM` | no | 4 | |
+
+### Multi-worker rate-limit caveat
+
+The rate limiter uses in-memory storage for Phase 3 (ADR-016). A deployment with N gunicorn workers effectively multiplies every quota by N — running 4 workers turns the "5 registrations/hour per IP" limit into 20 across the fleet. Documented failure mode; for a production deployment behind a proxy, either cap to a single worker or swap the limiter's storage URI to Redis (`storage_uri="redis://..."` — API-compatible, one-line change).
+
+### Cross-tenant behaviour
+
+A request from user B against a resource owned by user A returns `404 NOT_FOUND` — same envelope body as a genuinely-missing resource. The ownership filter is baked into every `*_for_user` query so wrong-owner is indistinguishable from doesn't-exist (ADR-015). Register, by contrast, still leaks email existence via `409 EMAIL_TAKEN` — accepted Phase 3 tradeoff, documented in ADR-015.
+
+See `.kiro/specs/phase-3-auth/` for full design and requirements, and ADRs [012](decisions/ADR-012-argon2-password-hashing.md), [013](decisions/ADR-013-jwt-hs256-rotating-refresh.md), [014](decisions/ADR-014-additive-protocol-extension.md), [015](decisions/ADR-015-404-over-403.md), [016](decisions/ADR-016-flask-limiter-in-memory.md), [017](decisions/ADR-017-cors-env-allowlist.md) for the non-trivial choices.
+
+---
+
+## Phase 2 — Persistence
 Phase 2 replaces Phase 1's in-memory repositories with a real relational database. Both backends coexist behind one `typing.Protocol` seam (see [ADR-007](decisions/ADR-007-dual-backend-repositories.md)), and backend selection is driven at app-factory time by environment variables:
 
 ```bash

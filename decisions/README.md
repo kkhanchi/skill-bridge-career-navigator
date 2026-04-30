@@ -36,3 +36,12 @@ ADR that supersedes it and note the supersession in both files.
 - [ADR-009: Session-per-request via before_request / teardown_request](./ADR-009-session-per-request.md)
 - [ADR-010: JSONB portability via SQLAlchemy variants](./ADR-010-jsonb-portability.md)
 - [ADR-011: Only jobs migrated to DB in Phase 2 (catalog-vs-DB boundary)](./ADR-011-catalog-vs-db-boundary.md)
+
+## Phase 3 ADRs
+
+- [ADR-012: Argon2id password hashing via argon2-cffi](./ADR-012-argon2-password-hashing.md)
+- [ADR-013: HS256 JWTs, stateless access, stateful rotating refresh](./ADR-013-jwt-hs256-rotating-refresh.md)
+- [ADR-014: Additive `*_for_user` extension over breaking signature change](./ADR-014-additive-protocol-extension.md)
+- [ADR-015: Return 404 for cross-tenant access, accept 409 register leak](./ADR-015-404-over-403.md)
+- [ADR-016: flask-limiter with in-memory storage (single-worker caveat)](./ADR-016-flask-limiter-in-memory.md)
+- [ADR-017: CORS allowlist via env var, prod requires explicit origins](./ADR-017-cors-env-allowlist.md)

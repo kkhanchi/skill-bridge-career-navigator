@@ -1,10 +1,85 @@
-# SkillBridge REST API — Phase 1 & 2 Reference
+# SkillBridge REST API — Phase 1, 2 & 3 Reference
 
 Base URL (local dev): `http://localhost:5000`
 
 All resource endpoints live under `/api/v1/`. `/health` is
 intentionally unversioned so load balancers and monitoring tools can
 probe the service without caring about API versions.
+
+## Authentication (Phase 3)
+
+Every resource endpoint under `/api/v1/profiles`, `/analyses`, and
+`/roadmaps` requires a valid Bearer access token. The `/api/v1/jobs`
+and `/health` endpoints remain public.
+
+**Workflow:**
+
+1. Register to get an initial `{access, refresh}` pair.
+2. Send `Authorization: Bearer <access>` on every protected request.
+3. When the 15-minute access token expires, POST the refresh to
+   `/api/v1/auth/refresh` to rotate both tokens. The old refresh is
+   revoked on use — one-shot rotation.
+4. Logout by POSTing the refresh to `/api/v1/auth/logout` (204).
+
+### Endpoint summary
+
+| Method | Path | Auth | Rate limit | Purpose |
+|---|---|---|---|---|
+| POST | `/api/v1/auth/register` | no | 5/hour/IP | Create user + initial token pair |
+| POST | `/api/v1/auth/login` | no | 10/minute/IP | Authenticate + token pair |
+| POST | `/api/v1/auth/refresh` | no | 30/minute/IP | Rotate tokens |
+| POST | `/api/v1/auth/logout` | no | — | Revoke refresh (idempotent 204) |
+| GET  | `/api/v1/auth/me` | yes | — | Introspect current user |
+
+### Curl recipes
+
+```bash
+# Register — returns 201 with user + access + refresh
+curl -X POST http://localhost:5000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "password": "correct horse battery staple"}'
+
+# Login
+curl -X POST http://localhost:5000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "password": "correct horse battery staple"}'
+
+# Use the access token — every resource endpoint needs this header
+ACCESS="eyJhbGci..."
+curl -H "Authorization: Bearer $ACCESS" \
+  http://localhost:5000/api/v1/auth/me
+
+# Rotate — returns new {access, refresh}; the old refresh is now dead
+curl -X POST http://localhost:5000/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d "{\"refresh\": \"$REFRESH\"}"
+
+# Logout — always 204, even on malformed or already-revoked tokens
+curl -X POST http://localhost:5000/api/v1/auth/logout \
+  -H "Content-Type: application/json" \
+  -d "{\"refresh\": \"$REFRESH\"}"
+```
+
+### Phase 3 error codes
+
+| Code | Status | When |
+|---|---|---|
+| `AUTH_REQUIRED` | 401 | Missing or malformed `Authorization` header |
+| `INVALID_CREDENTIALS` | 401 | Login with wrong password OR unknown email (same body either way — no account enumeration) |
+| `TOKEN_EXPIRED` | 401 | Access / refresh token's `exp` has passed |
+| `TOKEN_INVALID` | 401 | Bad signature, wrong `type` claim, revoked refresh, unknown `sub` |
+| `EMAIL_TAKEN` | 409 | Register with an already-registered email (case-insensitive) |
+| `RATE_LIMITED` | 429 | Per-IP rate limit on `/auth/*` tripped |
+
+### Cross-tenant access → 404
+
+Requests against resources owned by a different user return `404`
+with the same envelope body as a genuinely-missing resource — anti-
+enumeration by construction. See [ADR-015](decisions/ADR-015-404-over-403.md).
+
+Every existing `/api/v1/profiles`, `/analyses`, `/roadmaps` curl from
+Phase 1 / 2 now requires the Authorization header — prepend
+`-H "Authorization: Bearer $ACCESS"` to each example below.
 
 ## Persistence (Phase 2)
 
