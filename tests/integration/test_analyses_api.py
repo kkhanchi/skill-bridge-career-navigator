@@ -15,9 +15,9 @@ VALID_PROFILE = {
 }
 
 
-def _create_profile(client, **overrides):
+def _create_profile(authenticated_client, **overrides):
     payload = {**VALID_PROFILE, **overrides}
-    return client.post("/api/v1/profiles", json=payload).get_json()
+    return authenticated_client.post("/api/v1/profiles", json=payload).get_json()
 
 
 # ---------------------------------------------------------------------------
@@ -25,10 +25,10 @@ def _create_profile(client, **overrides):
 # ---------------------------------------------------------------------------
 
 
-def test_post_creates_analysis_with_gap_and_categorization(client):
-    profile = _create_profile(client)
+def test_post_creates_analysis_with_gap_and_categorization(authenticated_client):
+    profile = _create_profile(authenticated_client)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     )
@@ -49,11 +49,11 @@ def test_post_creates_analysis_with_gap_and_categorization(client):
     assert set(cat.keys()) == {"groups", "summary", "is_fallback"}
 
 
-def test_post_uses_fallback_categorizer_under_test_config(client):
+def test_post_uses_fallback_categorizer_under_test_config(authenticated_client):
     """R10.3: TestConfig forces the FallbackCategorizer for determinism."""
-    profile = _create_profile(client)
+    profile = _create_profile(authenticated_client)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     )
@@ -62,8 +62,8 @@ def test_post_uses_fallback_categorizer_under_test_config(client):
     assert body["categorization"]["is_fallback"] is True
 
 
-def test_post_returns_404_profile_not_found_for_unknown_profile(client):
-    response = client.post(
+def test_post_returns_404_profile_not_found_for_unknown_profile(authenticated_client):
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": "does-not-exist", "job_id": "backend-developer"},
     )
@@ -72,9 +72,9 @@ def test_post_returns_404_profile_not_found_for_unknown_profile(client):
     assert response.get_json()["error"]["code"] == "PROFILE_NOT_FOUND"
 
 
-def test_post_checks_profile_before_job(client):
+def test_post_checks_profile_before_job(authenticated_client):
     """R4.2 ordering: even if both ids are bogus, profile check runs first."""
-    response = client.post(
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": "missing-profile", "job_id": "missing-job"},
     )
@@ -84,10 +84,10 @@ def test_post_checks_profile_before_job(client):
     assert response.get_json()["error"]["code"] == "PROFILE_NOT_FOUND"
 
 
-def test_post_returns_404_job_not_found_when_only_job_is_missing(client):
-    profile = _create_profile(client)
+def test_post_returns_404_job_not_found_when_only_job_is_missing(authenticated_client):
+    profile = _create_profile(authenticated_client)
 
-    response = client.post(
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "bogus-job"},
     )
@@ -96,8 +96,8 @@ def test_post_returns_404_job_not_found_when_only_job_is_missing(client):
     assert response.get_json()["error"]["code"] == "JOB_NOT_FOUND"
 
 
-def test_post_rejects_empty_profile_id(client):
-    response = client.post(
+def test_post_rejects_empty_profile_id(authenticated_client):
+    response = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": "", "job_id": "backend-developer"},
     )
@@ -106,8 +106,8 @@ def test_post_rejects_empty_profile_id(client):
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_post_rejects_missing_body_keys(client):
-    response = client.post("/api/v1/analyses", json={"profile_id": "only-one"})
+def test_post_rejects_missing_body_keys(authenticated_client):
+    response = authenticated_client.post("/api/v1/analyses", json={"profile_id": "only-one"})
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
@@ -118,14 +118,14 @@ def test_post_rejects_missing_body_keys(client):
 # ---------------------------------------------------------------------------
 
 
-def test_get_returns_stored_analysis(client):
-    profile = _create_profile(client)
-    created = client.post(
+def test_get_returns_stored_analysis(authenticated_client):
+    profile = _create_profile(authenticated_client)
+    created = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
 
-    response = client.get(f"/api/v1/analyses/{created['id']}")
+    response = authenticated_client.get(f"/api/v1/analyses/{created['id']}")
 
     assert response.status_code == 200
     body = response.get_json()
@@ -133,8 +133,8 @@ def test_get_returns_stored_analysis(client):
     assert body["gap"]["match_percentage"] == created["gap"]["match_percentage"]
 
 
-def test_get_returns_404_analysis_not_found_for_unknown_id(client):
-    response = client.get("/api/v1/analyses/does-not-exist")
+def test_get_returns_404_analysis_not_found_for_unknown_id(authenticated_client):
+    response = authenticated_client.get("/api/v1/analyses/does-not-exist")
 
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "ANALYSIS_NOT_FOUND"

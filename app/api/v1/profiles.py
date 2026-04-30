@@ -9,19 +9,26 @@ Four handlers — create/read/update/delete — all wired through the
     domain violations (dedup drops everything, skill too long, etc.),
     which the handler converts to ``PROFILE_INVALID`` (400).
 
+Phase 3 (R6.1): every handler requires a valid access token via
+``@require_auth`` and scopes repository calls to ``current_user.id``
+through the ``*_for_user`` methods. Cross-tenant access collapses to
+``404 NOT_FOUND`` — wrong-owner is indistinguishable from
+doesn't-exist (ADR-015 anti-enumeration).
+
 Design reference: `.kiro/specs/phase-1-rest-api/design.md` §Profile handlers.
-Requirement reference: R1.1–R1.7, R9.1.
+Requirement reference: R1.1–R1.7, R6.1, R9.1, R13.7, R13.8.
 """
 
 from __future__ import annotations
 
 from flask import Blueprint, jsonify
 
+from app.auth.decorator import require_auth
 from app.core.profile_manager import create_profile as core_create_profile
 from app.core.profile_manager import update_profile as core_update_profile
 from app.core.models import UserProfile
 from app.extensions import get_ext
-from app.repositories.base import ProfileRecord
+from app.repositories.base import ProfileRecord, UserRecord
 from app.schemas.profile import ProfileCreate, ProfileResponse, ProfileUpdate
 from app.utils.errors import (
     NOT_FOUND,
@@ -59,12 +66,15 @@ def _serialize(record: ProfileRecord) -> dict:
 
 
 @bp.post("")
+@require_auth
 @validate_body(ProfileCreate)
-def create_profile_handler(*, body: ProfileCreate):
+def create_profile_handler(
+    *, body: ProfileCreate, current_user: UserRecord
+):
     """``POST /api/v1/profiles`` — create a profile, return 201.
 
-    Domain validation (dedup / size / length) runs in the core module.
-    Domain errors surface as ``PROFILE_INVALID`` (400).
+    Stamped with ``current_user.id`` so only the creator can read or
+    mutate the profile afterwards.
     """
     try:
         profile, _notification = core_create_profile(
@@ -77,33 +87,33 @@ def create_profile_handler(*, body: ProfileCreate):
     except ValueError as err:
         raise ApiError(PROFILE_INVALID, str(err), status=400) from err
 
-    record = get_ext().profile_repo.create(profile)
+    record = get_ext().profile_repo.create_for_user(current_user.id, profile)
     return jsonify(_serialize(record)), 201
 
 
 @bp.get("/<profile_id>")
-def get_profile_handler(profile_id: str):
-    """``GET /api/v1/profiles/{id}`` — 200 or 404 ``NOT_FOUND``."""
-    record = get_ext().profile_repo.get(profile_id)
+@require_auth
+def get_profile_handler(profile_id: str, *, current_user: UserRecord):
+    """``GET /api/v1/profiles/{id}`` — 200 or 404 ``NOT_FOUND``.
+
+    Anti-enumeration: 404 for both "unknown id" and "id owned by a
+    different user".
+    """
+    record = get_ext().profile_repo.get_for_user(profile_id, current_user.id)
     if record is None:
         raise ApiError(NOT_FOUND, "Profile not found", status=404)
     return jsonify(_serialize(record)), 200
 
 
 @bp.patch("/<profile_id>")
+@require_auth
 @validate_body(ProfileUpdate)
-def patch_profile_handler(profile_id: str, *, body: ProfileUpdate):
-    """``PATCH /api/v1/profiles/{id}`` — apply partial updates, return 200.
-
-    Order of operations inside the handler:
-      1. Fetch existing record (404 ``NOT_FOUND`` if missing).
-      2. Run skill add/remove through ``core.update_profile`` (may raise
-         ``ValueError`` → ``PROFILE_INVALID``).
-      3. Apply direct field overrides (name / years / education / role).
-      4. Persist via ``ProfileRepository.update`` — stamps ``updated_at``.
-    """
+def patch_profile_handler(
+    profile_id: str, *, body: ProfileUpdate, current_user: UserRecord
+):
+    """``PATCH /api/v1/profiles/{id}`` — apply partial updates, return 200."""
     repo = get_ext().profile_repo
-    existing = repo.get(profile_id)
+    existing = repo.get_for_user(profile_id, current_user.id)
     if existing is None:
         raise ApiError(NOT_FOUND, "Profile not found", status=404)
 
@@ -134,7 +144,7 @@ def patch_profile_handler(profile_id: str, *, body: ProfileUpdate):
         ),
     )
 
-    updated = repo.update(profile_id, working)
+    updated = repo.update_for_user(profile_id, current_user.id, working)
     # Defensive: update should not return None here because we already
     # confirmed existence above, but honour the Protocol contract.
     if updated is None:
@@ -143,14 +153,15 @@ def patch_profile_handler(profile_id: str, *, body: ProfileUpdate):
 
 
 @bp.delete("/<profile_id>")
-def delete_profile_handler(profile_id: str):
+@require_auth
+def delete_profile_handler(profile_id: str, *, current_user: UserRecord):
     """``DELETE /api/v1/profiles/{id}`` — 204 on success, 404 if missing.
 
-    No cascade: analyses/roadmaps that referenced the deleted profile
-    become orphaned records accessible only by their own ids (documented
-    Phase 1 limitation).
+    Phase 3: no cascade at this layer — analyses/roadmaps owned by the
+    same user remain accessible by their ids until deleted directly
+    (documented Phase 1 limitation, unchanged).
     """
-    deleted = get_ext().profile_repo.delete(profile_id)
+    deleted = get_ext().profile_repo.delete_for_user(profile_id, current_user.id)
     if not deleted:
         raise ApiError(NOT_FOUND, "Profile not found", status=404)
     return "", 204

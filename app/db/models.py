@@ -69,18 +69,21 @@ class UserORM(Base):
 class ProfileORM(Base):
     """User's career profile.
 
-    ``user_id`` stays nullable in Phase 2 — Phase 3 flips it to NOT NULL
-    after backfilling existing rows. ``skills`` is a JSON list of
-    strings; per-skill validation happens at the Pydantic layer.
+    Phase 3 (migration 0002) flipped ``user_id`` to NOT NULL with
+    ``ON DELETE CASCADE``. Rows written via the Phase 1/2 ``create``
+    method (no user_id) are no longer valid — handlers now call
+    ``create_for_user`` which stamps ``user_id`` from ``current_user.id``.
+    The ORM declaration here mirrors the migrated schema so
+    autogenerate doesn't flag drift on the next migration.
     """
 
     __tablename__ = "profiles"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         String(32),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -141,10 +144,10 @@ class AnalysisORM(Base):
     __tablename__ = "analyses"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         String(32),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     profile_id: Mapped[str | None] = mapped_column(
         String(32),
@@ -199,5 +202,54 @@ class RoadmapORM(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class RefreshTokenORM(Base):
+    """A single refresh-token grant (Phase 3).
+
+    One row per issued refresh token. We never store the token string
+    itself — only its ``jti`` (the JWT's unique id claim). Verifying a
+    refresh request:
+
+    1. Decode the presented JWT -> extract jti.
+    2. Look the row up by jti.
+    3. Row exists, not expired, ``revoked_at IS NULL`` -> accept.
+
+    Rotation-on-refresh sets ``revoked_at = now()`` on the old row and
+    inserts a new row for the replacement token. Reuse of a revoked
+    jti is treated identically to an unknown jti — both return 401
+    TOKEN_INVALID. (See design §Open Question Q3 on theft detection.)
+
+    ``user_id`` uses ON DELETE CASCADE: deleting a user wipes their
+    token grants.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # jti is the claim we look up by; unique so a forged duplicate
+    # cannot collide with an existing row.
+    jti: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    # Null until the token is revoked. A NOT NULL value timestamps the
+    # revocation for audit / future theft-detection windows.
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
         nullable=False,
     )

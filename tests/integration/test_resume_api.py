@@ -47,17 +47,19 @@ def test_post_parse_rejects_text_exceeding_50k_chars(client):
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_post_parse_has_no_side_effects(client):
+def test_post_parse_has_no_side_effects(client, authenticated_client):
     """Calling /resume/parse twice must not affect any repository state."""
     text = "Python, SQL, Docker."
 
     # Baseline: count existing profiles (should be 0 in a fresh test app).
     # We can't introspect the repo directly without reaching into extensions,
     # but we can assert that a GET on a random id still returns 404 unchanged
-    # after two parse calls.
+    # after two parse calls. The profiles endpoint is protected in Phase 3,
+    # so the GET probe goes through authenticated_client while the parse
+    # calls stay on the public client.
     client.post("/api/v1/resume/parse", json={"text": text})
     client.post("/api/v1/resume/parse", json={"text": text})
 
     # Nothing new should be reachable.
-    r = client.get("/api/v1/profiles/random-uuid-never-created")
+    r = authenticated_client.get("/api/v1/profiles/random-uuid-never-created")
     assert r.status_code == 404

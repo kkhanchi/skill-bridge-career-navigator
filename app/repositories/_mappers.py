@@ -34,13 +34,17 @@ from app.db.models import (
     AnalysisORM,
     JobORM,
     ProfileORM,
+    RefreshTokenORM,
     RoadmapORM,
+    UserORM,
 )
 from app.repositories.base import (
     AnalysisRecord,
     JobRecord,
     ProfileRecord,
+    RefreshTokenRecord,
     RoadmapRecord,
+    UserRecord,
 )
 
 
@@ -237,4 +241,37 @@ def roadmap_row_from_record(rec: RoadmapRecord) -> RoadmapORM:
         phases=phases_json,
         created_at=rec.created_at,
         updated_at=rec.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# UserRecord / RefreshTokenRecord <-> ORM (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+def user_record_from_row(row: UserORM) -> UserRecord:
+    """ORM row -> UserRecord (read-only direction).
+
+    The reverse direction (record -> row) is intentionally omitted:
+    user rows are only ever created inside the SQL user repository via
+    ``session.add(UserORM(...))`` with freshly generated ids, never
+    from a pre-existing ``UserRecord``.
+    """
+    return UserRecord(
+        id=row.id,
+        email=row.email,
+        password_hash=row.password_hash,
+        created_at=row.created_at,
+    )
+
+
+def refresh_token_record_from_row(row: RefreshTokenORM) -> RefreshTokenRecord:
+    """ORM row -> RefreshTokenRecord."""
+    return RefreshTokenRecord(
+        id=row.id,
+        user_id=row.user_id,
+        jti=row.jti,
+        expires_at=row.expires_at,
+        revoked_at=row.revoked_at,
+        created_at=row.created_at,
     )

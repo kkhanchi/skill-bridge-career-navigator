@@ -27,6 +27,8 @@ import os
 from dataclasses import dataclass, field
 
 from flask import Flask, current_app
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -35,6 +37,7 @@ from app.core.job_catalog import load_jobs
 from app.core.models import LearningResource
 from app.core.resume_parser import load_taxonomy
 from app.core.roadmap_generator import _load_resources
+from app.auth.hashing import Argon2Hasher
 from app.db.engine import build_engine
 from app.db.session import set_session_factory
 from app.repositories.analysis_repo import InMemoryAnalysisRepository
@@ -42,15 +45,21 @@ from app.repositories.base import (
     AnalysisRepository,
     JobRepository,
     ProfileRepository,
+    RefreshTokenRepository,
     RoadmapRepository,
+    UserRepository,
 )
 from app.repositories.job_repo import InMemoryJobRepository
 from app.repositories.profile_repo import InMemoryProfileRepository
+from app.repositories.refresh_token_repo import InMemoryRefreshTokenRepository
 from app.repositories.roadmap_repo import InMemoryRoadmapRepository
 from app.repositories.sql_analysis_repo import SqlAlchemyAnalysisRepository
 from app.repositories.sql_job_repo import SqlAlchemyJobRepository
 from app.repositories.sql_profile_repo import SqlAlchemyProfileRepository
+from app.repositories.sql_refresh_token_repo import SqlAlchemyRefreshTokenRepository
 from app.repositories.sql_roadmap_repo import SqlAlchemyRoadmapRepository
+from app.repositories.sql_user_repo import SqlAlchemyUserRepository
+from app.repositories.user_repo import InMemoryUserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -136,14 +145,25 @@ class Extensions:
     job_repo: JobRepository
     analysis_repo: AnalysisRepository
     roadmap_repo: RoadmapRepository
+    # Phase 3: auth-related repositories + argon2 hasher.
+    user_repo: UserRepository
+    refresh_token_repo: RefreshTokenRepository
+    hasher: Argon2Hasher
     taxonomy: list[str]
     resources: list[LearningResource]
     categorizer: SkillCategorizerInterface
 
-    # Phase 2: SQL backend handles. Both are ``None`` on memory-backed
+    # Phase 3: SQL backend handles. Both are ``None`` on memory-backed
     # apps; handlers never touch them directly.
     engine: Engine | None = None
     session_factory: sessionmaker[Session] | None = None
+
+    # Phase 3: flask-limiter instance. Kept on Extensions so handlers
+    # can reference it via ``get_ext().limiter`` inside the auth
+    # blueprint (``@limiter.limit(...)`` is applied at handler-decoration
+    # time so it needs access to the per-app instance). ``None`` until
+    # ``init_extensions`` wires it.
+    limiter: Limiter | None = None
 
     # Diagnostic breadcrumbs — what paths/URLs were used at init.
     # `_database_url` is kept for introspection in tests only; it must
@@ -185,6 +205,20 @@ def _select_categorizer(app: Flask) -> SkillCategorizerInterface:
 # ---------------------------------------------------------------------------
 
 
+def _build_hasher(app: Flask) -> Argon2Hasher:
+    """Construct the per-app argon2 hasher from config.
+
+    Building one hasher per app (not per request) keeps the dummy-hash
+    computation — the ~50ms argon2 call used by the constant-time
+    login flow — to a single startup hit.
+    """
+    return Argon2Hasher(
+        time_cost=int(app.config["ARGON2_TIME_COST"]),
+        memory_cost=int(app.config["ARGON2_MEMORY_COST"]),
+        parallelism=int(app.config["ARGON2_PARALLELISM"]),
+    )
+
+
 def _build_memory_extensions(app: Flask) -> Extensions:
     """Phase 1 flow: in-memory repositories over JSON data."""
     jobs_path = app.config["JOBS_PATH"]
@@ -200,6 +234,9 @@ def _build_memory_extensions(app: Flask) -> Extensions:
         job_repo=InMemoryJobRepository(jobs),
         analysis_repo=InMemoryAnalysisRepository(),
         roadmap_repo=InMemoryRoadmapRepository(),
+        user_repo=InMemoryUserRepository(),
+        refresh_token_repo=InMemoryRefreshTokenRepository(),
+        hasher=_build_hasher(app),
         taxonomy=taxonomy,
         resources=resources,
         categorizer=_select_categorizer(app),
@@ -238,6 +275,9 @@ def _build_sql_extensions(app: Flask, backend: str) -> Extensions:
         job_repo=SqlAlchemyJobRepository(),
         analysis_repo=SqlAlchemyAnalysisRepository(),
         roadmap_repo=SqlAlchemyRoadmapRepository(),
+        user_repo=SqlAlchemyUserRepository(),
+        refresh_token_repo=SqlAlchemyRefreshTokenRepository(),
+        hasher=_build_hasher(app),
         taxonomy=taxonomy,
         resources=resources,
         categorizer=_select_categorizer(app),
@@ -262,7 +302,12 @@ def init_extensions(app: Flask) -> None:
     Dispatches to the memory or SQL builder based on
     :func:`pick_backend`. The result is stored on
     ``app.extensions["skillbridge"]``.
+
+    Phase 3: enforce ``JWT_SECRET`` in prod and emit a dev-default
+    warning; then wire a flask-limiter bound to this app.
     """
+    _enforce_jwt_secret(app)
+
     backend = pick_backend(app.config)
 
     if backend == "memory":
@@ -276,6 +321,21 @@ def init_extensions(app: Flask) -> None:
     # leftover factory from an earlier test app.
     set_session_factory(ext.session_factory)
 
+    # Phase 3: rate limiter. Per-app instance so TestConfig tests get
+    # a fresh counter on every create_app, matching the per-test
+    # isolation pattern (R10.2). In-memory storage is fine for a
+    # single-worker deployment; multi-worker production would swap
+    # ``memory://`` for ``redis://...`` (ADR-016).
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri="memory://",
+        default_limits=[],  # per-route @limit decorators only
+        strategy="fixed-window",
+        headers_enabled=True,
+    )
+    limiter.init_app(app)
+    ext.limiter = limiter
+
     app.extensions[_EXT_KEY] = ext
 
     logger.info(
@@ -287,6 +347,31 @@ def init_extensions(app: Flask) -> None:
             "categorizer": type(ext.categorizer).__name__,
         }},
     )
+
+
+def _enforce_jwt_secret(app: Flask) -> None:
+    """Phase 3 fail-loud / warn-on-default for JWT_SECRET.
+
+    - In prod: empty ``JWT_SECRET`` aborts startup with RuntimeError.
+      Failing at create_app is better than failing at the first login
+      request three hours into a deploy.
+    - In dev with the dev-default literal in use: log a warning once.
+      The dev default is never valid for any shared deployment.
+    - In test: no action — TestConfig carries a fixed literal.
+    """
+    env = str(app.config.get("APP_ENV", "") or "").lower()
+    secret = str(app.config.get("JWT_SECRET", "") or "")
+
+    if env == "prod" and not secret:
+        raise RuntimeError("JWT_SECRET is required in production")
+
+    if env == "dev" and secret == "dev-secret-do-not-use-in-prod":
+        logger.warning(
+            "jwt_secret.using_dev_default",
+            extra={"extra_fields": {
+                "hint": "set JWT_SECRET env var for any shared deployment",
+            }},
+        )
 
 
 def get_ext(app: Flask | None = None) -> Extensions:

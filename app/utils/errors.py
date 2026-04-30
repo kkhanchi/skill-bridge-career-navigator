@@ -35,6 +35,18 @@ ROADMAP_NOT_FOUND = "ROADMAP_NOT_FOUND"
 RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
 INTERNAL_ERROR = "INTERNAL_ERROR"
 
+# Phase 3: authentication & authorization codes (R14.2).
+# These six extend the Phase 1 closed set; no other codes are introduced
+# in Phase 3. Library-internal exceptions (PyJWT, argon2-cffi,
+# flask-limiter) map to these via handlers or the @require_auth decorator
+# before reaching the response.
+AUTH_REQUIRED = "AUTH_REQUIRED"              # no / malformed Authorization header
+INVALID_CREDENTIALS = "INVALID_CREDENTIALS"  # login failed (unknown email OR wrong pw)
+TOKEN_EXPIRED = "TOKEN_EXPIRED"              # JWT exp has passed
+TOKEN_INVALID = "TOKEN_INVALID"              # bad signature/type/claims, or revoked refresh
+EMAIL_TAKEN = "EMAIL_TAKEN"                  # register collided with existing user
+RATE_LIMITED = "RATE_LIMITED"                # flask-limiter rejection
+
 # Mapping Flask HTTPException status codes to our own codes when the
 # framework raises them directly (e.g. unknown route -> 404).
 _HTTP_STATUS_TO_CODE: dict[int, str] = {
@@ -98,6 +110,29 @@ def register_error_handlers(app: Flask) -> None:
             }},
         )
         return _envelope(err.code, err.message, err.details), err.status
+
+    # Phase 3: map flask-limiter's RateLimitExceeded to a 429 envelope.
+    # Registered BEFORE the generic HTTPException handler so the
+    # RateLimitExceeded class (a subclass of werkzeug HTTPException) is
+    # matched by the more specific errorhandler.
+    try:
+        from flask_limiter.errors import RateLimitExceeded
+
+        @app.errorhandler(RateLimitExceeded)
+        def _handle_rate_limit(err: "RateLimitExceeded"):  # noqa: F821
+            logger.info(
+                "rate_limited",
+                extra={"extra_fields": {"cid": _cid(), "description": str(err.description)}},
+            )
+            return (
+                _envelope(RATE_LIMITED, f"Rate limit exceeded: {err.description}"),
+                429,
+            )
+    except ImportError:
+        # flask-limiter is listed in requirements; if it's missing at
+        # import time we skip the handler rather than crashing — the
+        # rate-limiter init would have already failed upstream.
+        pass
 
     @app.errorhandler(HTTPException)
     def _handle_http_exception(err: HTTPException):

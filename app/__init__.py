@@ -16,6 +16,7 @@ import time
 from uuid import uuid4
 
 from flask import Flask, g, request
+from flask_cors import CORS
 
 from app.config import CONFIG_MAP
 from app.extensions import init_extensions
@@ -23,6 +24,51 @@ from app.utils.errors import register_error_handlers
 from app.utils.logging import configure_logging
 
 logger = logging.getLogger(__name__)
+
+
+def _init_cors(app: Flask) -> None:
+    """Configure flask-cors from the ``CORS_ORIGINS`` env/config value.
+
+    Policy:
+      - Empty ``CORS_ORIGINS``: skip CORS entirely. Prod default; safer
+        than a permissive fallback.
+      - ``"*"``: allow any origin. Dev default only — explicitly
+        documented as unsuitable for prod (ADR-017).
+      - Comma-separated list: exact-match allowlist.
+
+    In all cases:
+      - ``supports_credentials=False`` — we use Bearer tokens in the
+        Authorization header, not cookies, so no credential cookies
+        need to travel cross-origin.
+      - ``allow_headers`` includes Authorization, Content-Type, and
+        X-Correlation-ID so the browser preflight pass ``OPTIONS``
+        doesn't strip our auth header.
+      - ``expose_headers`` surfaces X-Correlation-ID back to browser
+        JS so clients can correlate their request with server logs.
+      - ``max_age=600`` caches the preflight response for 10 minutes.
+
+    Design reference: `.kiro/specs/phase-3-auth/design.md` §CORS.
+    """
+    origins_raw = str(app.config.get("CORS_ORIGINS", "") or "").strip()
+    if not origins_raw:
+        # Prod default — no CORS headers emitted. Same-origin callers
+        # still work; browser JS from other origins is rejected by
+        # the browser, not by us.
+        return
+
+    if origins_raw == "*":
+        origins: str | list[str] = "*"
+    else:
+        origins = [o.strip() for o in origins_raw.split(",") if o.strip()]
+
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": origins}},
+        supports_credentials=False,
+        allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
+        expose_headers=["X-Correlation-ID"],
+        max_age=600,
+    )
 
 
 def _register_request_hooks(app: Flask) -> None:
@@ -117,10 +163,11 @@ def _register_blueprints(app: Flask) -> None:
 
     Resource blueprints land under ``/api/v1/<resource>`` (R9.1).
     ``/health`` is served at the unversioned path (R8.3, R9.2).
-    Blueprints for resume/jobs/analyses/roadmaps are added in
-    later stages; this function is extended as they arrive.
+    Phase 3 adds ``/api/v1/auth`` for registration / login / refresh /
+    logout / me.
     """
     from app.api.v1.analyses import bp as analyses_bp
+    from app.api.v1.auth import bp as auth_bp
     from app.api.v1.health import bp as health_bp
     from app.api.v1.jobs import bp as jobs_bp
     from app.api.v1.profiles import bp as profiles_bp
@@ -128,6 +175,7 @@ def _register_blueprints(app: Flask) -> None:
     from app.api.v1.roadmaps import bp as roadmaps_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(profiles_bp, url_prefix="/api/v1/profiles")
     app.register_blueprint(resume_bp, url_prefix="/api/v1/resume")
     app.register_blueprint(jobs_bp, url_prefix="/api/v1/jobs")
@@ -155,6 +203,7 @@ def create_app(config_name: str = "dev") -> Flask:
     app.config.from_object(CONFIG_MAP[config_name])
 
     configure_logging(app)
+    _init_cors(app)
     init_extensions(app)
     register_error_handlers(app)
     _register_request_hooks(app)

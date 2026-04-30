@@ -92,3 +92,66 @@ class SqlAlchemyRoadmapRepository:
         session.flush()
 
         return roadmap_record_from_row(row)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 multi-tenant methods
+# ---------------------------------------------------------------------------
+#
+# Roadmaps have no ``user_id`` column of their own — ownership is
+# carried by the roadmap's parent analysis. ``get_for_user`` JOINs
+# through to ``analyses.user_id`` so the query returns rows only when
+# the caller owns the originating analysis.
+
+from sqlalchemy import select as _select
+
+from app.db.models import AnalysisORM as _AnalysisORM
+
+
+def _create_for_user(self, user_id, record):
+    """Persist a roadmap owned (transitively) by ``user_id``.
+
+    The ``user_id`` argument is retained for API symmetry across the
+    three repositories. ``roadmaps`` itself has no ownership column,
+    so the argument is unused at write time — ownership is derived
+    via the referenced analysis's ``user_id``.
+    """
+    del user_id  # intentional: carried by roadmap.analysis_id's user
+    return self.create(record)
+
+
+def _get_for_user(self, roadmap_id, user_id):
+    """Fetch only when the owning analysis belongs to ``user_id``.
+
+    JOINs roadmaps -> analyses and filters on analyses.user_id.
+    Anti-enumeration (R12.7): wrong-owner is invisible.
+    """
+    session = get_db_session()
+    row = session.scalar(
+        _select(RoadmapORM)
+        .join(_AnalysisORM, RoadmapORM.analysis_id == _AnalysisORM.id)
+        .where(
+            (RoadmapORM.id == roadmap_id) & (_AnalysisORM.user_id == user_id)
+        )
+    )
+    return roadmap_record_from_row(row) if row is not None else None
+
+
+def _update_resource_for_user(
+    self, roadmap_id, resource_id, user_id, completed
+):
+    """Update a resource only if the owning analysis belongs to ``user_id``.
+
+    Ownership gate first; the mutation then reuses ``update_resource``
+    so the ``flag_modified("phases")`` contract stays in one place.
+    Two queries on the ownership path is an acceptable price for
+    keeping the JSON-mutation invariant in a single method.
+    """
+    if self.get_for_user(roadmap_id, user_id) is None:
+        return None
+    return self.update_resource(roadmap_id, resource_id, completed)
+
+
+SqlAlchemyRoadmapRepository.create_for_user = _create_for_user
+SqlAlchemyRoadmapRepository.get_for_user = _get_for_user
+SqlAlchemyRoadmapRepository.update_resource_for_user = _update_resource_for_user

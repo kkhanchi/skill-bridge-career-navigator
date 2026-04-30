@@ -81,6 +81,43 @@ class RoadmapRecord:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3 Record wrappers
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class UserRecord:
+    """A stored user account.
+
+    ``password_hash`` is the argon2id encoded string — never the raw
+    password, never hex, never anything but the exact output of
+    ``Argon2Hasher.hash``.
+    """
+
+    id: str
+    email: str
+    password_hash: str
+    created_at: datetime
+
+
+@dataclass
+class RefreshTokenRecord:
+    """A single issued refresh token's bookkeeping row.
+
+    One row per token grant. ``revoked_at`` is None for live tokens and
+    a wall-clock timestamp for revoked ones. The token string itself is
+    never stored — only its ``jti``.
+    """
+
+    id: str
+    user_id: str
+    jti: str
+    expires_at: datetime
+    revoked_at: datetime | None
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Protocol definitions
 # ---------------------------------------------------------------------------
 
@@ -92,6 +129,22 @@ class ProfileRepository(Protocol):
     def get(self, profile_id: str) -> ProfileRecord | None: ...
     def update(self, profile_id: str, profile: UserProfile) -> ProfileRecord | None: ...
     def delete(self, profile_id: str) -> bool: ...
+
+    # ---- Phase 3 multi-tenant variants (ADR-014) ----
+    # These parallel the methods above but take ``user_id`` and scope
+    # the lookup/mutation to rows owned by that user. Phase 1 tests
+    # continue to use the unscoped variants; Phase 3 handlers call
+    # only the ``_for_user`` variants.
+    def create_for_user(
+        self, user_id: str, profile: UserProfile
+    ) -> ProfileRecord: ...
+    def get_for_user(
+        self, profile_id: str, user_id: str
+    ) -> ProfileRecord | None: ...
+    def update_for_user(
+        self, profile_id: str, user_id: str, profile: UserProfile
+    ) -> ProfileRecord | None: ...
+    def delete_for_user(self, profile_id: str, user_id: str) -> bool: ...
 
 
 class JobRepository(Protocol):
@@ -111,6 +164,14 @@ class AnalysisRepository(Protocol):
     def create(self, record: AnalysisRecord) -> AnalysisRecord: ...
     def get(self, analysis_id: str) -> AnalysisRecord | None: ...
 
+    # ---- Phase 3 multi-tenant variants ----
+    def create_for_user(
+        self, user_id: str, record: AnalysisRecord
+    ) -> AnalysisRecord: ...
+    def get_for_user(
+        self, analysis_id: str, user_id: str
+    ) -> AnalysisRecord | None: ...
+
 
 class RoadmapRepository(Protocol):
     """Persistence for roadmaps and per-resource completion updates."""
@@ -126,5 +187,68 @@ class RoadmapRepository(Protocol):
             Updated :class:`RoadmapRecord` on success, or ``None`` when
             either the roadmap or the specific resource does not exist
             (handler inspects ``get()`` to distinguish the two 404 codes).
+        """
+        ...
+
+    # ---- Phase 3 multi-tenant variants ----
+    def create_for_user(
+        self, user_id: str, record: RoadmapRecord
+    ) -> RoadmapRecord: ...
+    def get_for_user(
+        self, roadmap_id: str, user_id: str
+    ) -> RoadmapRecord | None: ...
+    def update_resource_for_user(
+        self,
+        roadmap_id: str,
+        resource_id: str,
+        user_id: str,
+        completed: bool,
+    ) -> RoadmapRecord | None: ...
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 Protocols
+# ---------------------------------------------------------------------------
+
+
+class UserRepository(Protocol):
+    """Persistence for :class:`UserRecord` accounts.
+
+    Email normalization (strip + lower-case) is the repository's job,
+    not the handler's. Callers pass raw email strings; the repository
+    is responsible for consistent casing so ``get_by_email`` and
+    ``exists_by_email`` never miss a hit because of a casing quirk.
+    """
+
+    def create(self, *, email: str, password_hash: str) -> UserRecord: ...
+    def get_by_id(self, user_id: str) -> UserRecord | None: ...
+    def get_by_email(self, email: str) -> UserRecord | None: ...
+    def exists_by_email(self, email: str) -> bool: ...
+
+
+class RefreshTokenRepository(Protocol):
+    """Persistence for refresh-token grants."""
+
+    def create(
+        self, *, user_id: str, jti: str, expires_at: datetime
+    ) -> RefreshTokenRecord: ...
+    def get_by_jti(self, jti: str) -> RefreshTokenRecord | None: ...
+    def revoke(self, jti: str) -> bool:
+        """Mark the token revoked.
+
+        Returns True if the row existed and transitioned from live to
+        revoked in this call; False if the row didn't exist or was
+        already revoked (idempotent). Handlers treat both False cases
+        identically — as 401 TOKEN_INVALID.
+        """
+        ...
+
+    def is_revoked(self, jti: str) -> bool:
+        """Return True iff a row for ``jti`` exists AND ``revoked_at IS NOT NULL``.
+
+        An unknown jti returns False — the handler's first step is
+        ``get_by_jti`` which separates unknown from known-but-revoked.
+        ``is_revoked`` is a convenience for the "already revoked?"
+        idempotency check inside ``revoke``.
         """
         ...
