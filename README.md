@@ -52,20 +52,56 @@ Without a tool like this, the typical workflow is: browse job postings → feel 
 - Python 3.10+
 - A Groq API key (free at [console.groq.com](https://console.groq.com)) — optional, the app works without it using rule-based fallback
 
-### Run Commands
+### Run commands
+
+The project ships two frontends: the original Streamlit UI and the new Flask REST API introduced in Phase 1.
+
 ```bash
 cd skill-bridge
 pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and add your GROQ_API_KEY (optional)
+```
+
+**Option 1 — Streamlit reference UI** (original prototype):
+```bash
 streamlit run app.py
 ```
+
+**Option 2 — Flask REST API** (Phase 1):
+```bash
+# Development server
+python run.py
+
+# Or production-style with gunicorn (single worker — see ADR-003)
+gunicorn -w 1 wsgi:application
+```
+
+See [`API.md`](API.md) for endpoint reference and curl recipes, and [`.kiro/specs/phase-1-rest-api/`](../.kiro/specs/phase-1-rest-api/) for the Phase 1 design, requirements, and task breakdown.
 
 ### Test Commands
 ```bash
 cd skill-bridge
 pytest tests/ -v
 ```
+
+---
+
+## Phase 1 — REST API Foundation (current)
+
+The project is evolving from a Streamlit prototype into a production-quality backend. Phase 1 adds a Flask REST API under `/api/v1/` that exposes the existing business logic over HTTP.
+
+**What shipped in Phase 1:**
+- 12 endpoints (profiles CRUD, resume parse, jobs list/detail, analyses, roadmaps + resource PATCH, health) under `/api/v1/`
+- Flask application factory with environment configs (dev/test/prod)
+- Pydantic v2 request/response validation with a uniform `{"error": {"code", "message"}}` envelope
+- Per-request correlation IDs flowing through structured JSON logs and the `X-Correlation-ID` response header
+- Repository pattern behind `typing.Protocol` interfaces (Phase 2 slots SQLAlchemy in without touching handlers)
+- 89 tests: unit + integration + 5 Hypothesis property tests covering round-trip, pagination partition, case-insensitivity, completion monotonicity, and error envelope shape
+
+See [`API.md`](API.md) for the endpoint reference, the [`decisions/`](decisions/) folder for ADRs explaining the non-trivial choices, and [`.kiro/specs/phase-1-rest-api/`](../.kiro/specs/phase-1-rest-api/) for the full spec.
+
+The Streamlit UI continues to work unchanged throughout Phase 1 via root-level shim modules (see [ADR-006](decisions/ADR-006-streamlit-shims.md)).
 
 ---
 

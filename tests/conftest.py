@@ -56,3 +56,24 @@ def sample_resources():
                          resource_type="course", estimated_hours=8,
                          url="https://example.com/redis"),
     ]
+
+# ---------------------------------------------------------------------------
+# Flask integration fixtures (added in Phase 1 / Stage B).
+#
+# Each integration test gets a fresh ``create_app("test")`` instance so
+# in-memory repositories stay isolated across tests (R10.2).
+# ---------------------------------------------------------------------------
+
+from app import create_app
+
+
+@pytest.fixture
+def app():
+    """Build a fresh Flask app configured for tests (TestConfig)."""
+    return create_app("test")
+
+
+@pytest.fixture
+def client(app):
+    """Flask test client bound to the per-test app instance."""
+    return app.test_client()

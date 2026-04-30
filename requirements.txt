@@ -3,3 +3,8 @@ groq
 python-dotenv
 pytest
 hypothesis
+
+# Phase 1 — REST API
+flask>=3.0,<4
+pydantic>=2.6,<3
+gunicorn>=21.2,<23
