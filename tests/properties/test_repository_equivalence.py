@@ -42,6 +42,7 @@ from hypothesis.stateful import (
 )
 
 from app import create_app
+from app.auth.tokens import encode_access_token
 from app.db.base import Base
 from app.db.models import JobORM
 
@@ -51,6 +52,49 @@ from app.db.models import JobORM
 # making Hypothesis chase impossibly narrow inputs.
 _SKILLS = ["Python", "SQL", "Docker", "AWS", "REST APIs", "Git", "Redis"]
 _SEED_JOB_ID = "backend-developer"
+
+
+def _register_user_and_mint_token(app, email):
+    """Register a user on the app and return an access token.
+
+    The memory and SQL backends both expose ``ext.user_repo`` after
+    Stage H wiring; the registration path opens a request context so
+    SQL teardown commits the row for later requests to see.
+    """
+    ext = app.extensions["skillbridge"]
+    password_hash = ext.hasher.hash("correct horse battery staple")
+    with app.test_request_context():
+        app.preprocess_request()
+        user = ext.user_repo.create(email=email, password_hash=password_hash)
+        app.do_teardown_request(None)
+    with app.app_context():
+        return encode_access_token(user.id)
+
+
+class _AuthClientAdapter:
+    """Wrap a Flask test client with a default Bearer header."""
+
+    def __init__(self, inner, token):
+        self._inner = inner
+        self._auth = {"Authorization": f"Bearer {token}"}
+
+    def _merge(self, headers):
+        out = dict(self._auth)
+        if headers:
+            out.update(headers)
+        return out
+
+    def get(self, *a, headers=None, **kw):
+        return self._inner.get(*a, headers=self._merge(headers), **kw)
+
+    def post(self, *a, headers=None, **kw):
+        return self._inner.post(*a, headers=self._merge(headers), **kw)
+
+    def patch(self, *a, headers=None, **kw):
+        return self._inner.patch(*a, headers=self._merge(headers), **kw)
+
+    def delete(self, *a, headers=None, **kw):
+        return self._inner.delete(*a, headers=self._merge(headers), **kw)
 
 
 def _build_memory_app():
@@ -95,8 +139,24 @@ class DualBackendStateMachine(RuleBasedStateMachine):
         super().__init__()
         self.memory_app = _build_memory_app()
         self.sql_app = _build_sql_app()
-        self.memory_client = self.memory_app.test_client()
-        self.sql_client = self.sql_app.test_client()
+        # Phase 3: the two backends' profile/analysis/roadmap
+        # endpoints require @require_auth. Mint a user + token for
+        # each world so every HTTP call has the Authorization header.
+        # The two users are independent — each operates entirely
+        # inside its own tenant scope, which is what the original
+        # equivalence property cares about anyway.
+        mem_token = _register_user_and_mint_token(
+            self.memory_app, "equiv-mem@example.com"
+        )
+        sql_token = _register_user_and_mint_token(
+            self.sql_app, "equiv-sql@example.com"
+        )
+        self.memory_client = _AuthClientAdapter(
+            self.memory_app.test_client(), mem_token
+        )
+        self.sql_client = _AuthClientAdapter(
+            self.sql_app.test_client(), sql_token
+        )
         # Map memory_id -> sql_id for each resource type. Ids differ
         # between backends (both uuid4 hex, but independently
         # generated); we track the pairing so rules can address the

@@ -18,14 +18,14 @@ VALID_PROFILE = {
 }
 
 
-def _chain(client):
+def _chain(authenticated_client):
     """Helper: create profile -> analysis -> roadmap. Return all three payloads."""
-    profile = client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
-    analysis = client.post(
+    profile = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
+    analysis = authenticated_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
-    roadmap = client.post(
+    roadmap = authenticated_client.post(
         "/api/v1/roadmaps",
         json={"analysis_id": analysis["id"]},
     ).get_json()
@@ -37,8 +37,8 @@ def _chain(client):
 # ---------------------------------------------------------------------------
 
 
-def test_post_creates_roadmap_from_analysis(client):
-    _, analysis, roadmap = _chain(client)
+def test_post_creates_roadmap_from_analysis(authenticated_client):
+    _, analysis, roadmap = _chain(authenticated_client)
 
     assert roadmap["id"]
     assert roadmap["analysis_id"] == analysis["id"]
@@ -55,8 +55,8 @@ def test_post_creates_roadmap_from_analysis(client):
     assert len(set(all_ids)) == len(all_ids)
 
 
-def test_post_returns_404_analysis_not_found(client):
-    response = client.post(
+def test_post_returns_404_analysis_not_found(authenticated_client):
+    response = authenticated_client.post(
         "/api/v1/roadmaps",
         json={"analysis_id": "does-not-exist"},
     )
@@ -65,8 +65,8 @@ def test_post_returns_404_analysis_not_found(client):
     assert response.get_json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
-def test_post_rejects_empty_analysis_id(client):
-    response = client.post("/api/v1/roadmaps", json={"analysis_id": ""})
+def test_post_rejects_empty_analysis_id(authenticated_client):
+    response = authenticated_client.post("/api/v1/roadmaps", json={"analysis_id": ""})
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
@@ -84,11 +84,11 @@ def _pick_first_resource(roadmap: dict) -> dict:
     raise AssertionError("Roadmap has no resources — test data issue")
 
 
-def test_patch_resource_flips_completed_to_true(client):
-    _, _, roadmap = _chain(client)
+def test_patch_resource_flips_completed_to_true(authenticated_client):
+    _, _, roadmap = _chain(authenticated_client)
     first = _pick_first_resource(roadmap)
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/{first['id']}",
         json={"completed": True},
     )
@@ -107,15 +107,15 @@ def test_patch_resource_flips_completed_to_true(client):
     assert body["updated_at"] >= body["created_at"]
 
 
-def test_patch_resource_can_flip_back_to_false(client):
-    _, _, roadmap = _chain(client)
+def test_patch_resource_can_flip_back_to_false(authenticated_client):
+    _, _, roadmap = _chain(authenticated_client)
     first = _pick_first_resource(roadmap)
     rid = roadmap["id"]
     res_id = first["id"]
 
     # Flip to true, then back to false.
-    client.patch(f"/api/v1/roadmaps/{rid}/resources/{res_id}", json={"completed": True})
-    response = client.patch(
+    authenticated_client.patch(f"/api/v1/roadmaps/{rid}/resources/{res_id}", json={"completed": True})
+    response = authenticated_client.patch(
         f"/api/v1/roadmaps/{rid}/resources/{res_id}",
         json={"completed": False},
     )
@@ -128,8 +128,8 @@ def test_patch_resource_can_flip_back_to_false(client):
                 assert resource["completed"] is False
 
 
-def test_patch_returns_404_roadmap_not_found(client):
-    response = client.patch(
+def test_patch_returns_404_roadmap_not_found(authenticated_client):
+    response = authenticated_client.patch(
         "/api/v1/roadmaps/does-not-exist/resources/also-bogus",
         json={"completed": True},
     )
@@ -138,10 +138,10 @@ def test_patch_returns_404_roadmap_not_found(client):
     assert response.get_json()["error"]["code"] == "ROADMAP_NOT_FOUND"
 
 
-def test_patch_returns_404_resource_not_found_when_roadmap_exists(client):
-    _, _, roadmap = _chain(client)
+def test_patch_returns_404_resource_not_found_when_roadmap_exists(authenticated_client):
+    _, _, roadmap = _chain(authenticated_client)
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/bogus-resource-id",
         json={"completed": True},
     )
@@ -150,11 +150,11 @@ def test_patch_returns_404_resource_not_found_when_roadmap_exists(client):
     assert response.get_json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
-def test_patch_rejects_missing_completed_field(client):
-    _, _, roadmap = _chain(client)
+def test_patch_rejects_missing_completed_field(authenticated_client):
+    _, _, roadmap = _chain(authenticated_client)
     first = _pick_first_resource(roadmap)
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/{first['id']}",
         json={},
     )
@@ -168,13 +168,13 @@ def test_patch_rejects_missing_completed_field(client):
 # ---------------------------------------------------------------------------
 
 
-def test_completion_monotonicity_sanity(client):
+def test_completion_monotonicity_sanity(authenticated_client):
     """Marking a resource complete must not decrease the recalculated match %.
 
     Non-Hypothesis form of R5.6: compute the recalculated match % before
     and after a PATCH; the post-PATCH value is >= the pre-PATCH value.
     """
-    _, _, roadmap = _chain(client)
+    _, _, roadmap = _chain(authenticated_client)
     first = _pick_first_resource(roadmap)
 
     # Build domain objects for recalculate_match. Profile has one skill
@@ -187,7 +187,7 @@ def test_completion_monotonicity_sanity(client):
         education=VALID_PROFILE["education"],
         target_role=VALID_PROFILE["target_role"],
     )
-    job_resp = client.get("/api/v1/jobs/backend-developer").get_json()
+    job_resp = authenticated_client.get("/api/v1/jobs/backend-developer").get_json()
     job = JobPosting(
         title=job_resp["title"],
         description=job_resp["description"],
@@ -220,7 +220,7 @@ def test_completion_monotonicity_sanity(client):
 
     before_match = recalculate_match(profile, job, to_domain_roadmap(roadmap))
 
-    patched = client.patch(
+    patched = authenticated_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/{first['id']}",
         json={"completed": True},
     ).get_json()

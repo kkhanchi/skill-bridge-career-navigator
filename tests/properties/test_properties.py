@@ -9,6 +9,14 @@ the suite under a second while still surfacing counterexamples for any
 regression in the contract. If a property fails, Hypothesis will
 minimise the input and print it.
 
+Phase 3 note: every endpoint exercised here except ``/api/v1/jobs`` is
+now protected by ``@require_auth``. ``_fresh_client()`` mints a user
+and an access token, then wraps the Flask test client with a default
+``Authorization: Bearer <token>`` header so the property tests stay
+otherwise unchanged. The public ``/jobs`` call in the pagination
+property still uses the underlying plain client because the header is
+harmless (the handler doesn't read it).
+
 Requirement reference: R1.8, R3.7, R4.7, R5.6, R6.6, R6.2, R7.3.
 """
 
@@ -20,6 +28,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings, strategies as st
 
 from app import create_app
+from app.auth.tokens import encode_access_token
 
 
 VALID_ERROR_CODES = {
@@ -34,18 +43,69 @@ VALID_ERROR_CODES = {
     "INTERNAL_ERROR",
     "METHOD_NOT_ALLOWED",
     "UNSUPPORTED_MEDIA_TYPE",
+    # Phase 3: auth failure codes can land here when Hypothesis
+    # generates requests without the header or with a malformed one.
+    "AUTH_REQUIRED",
+    "TOKEN_EXPIRED",
+    "TOKEN_INVALID",
+    "EMAIL_TAKEN",
+    "RATE_LIMITED",
 }
 
 
 # ---------------------------------------------------------------------------
 # Fresh app per example — property tests can't reuse a function-scoped
-# fixture inside @given, so we build one directly.
+# fixture inside @given, so we build one directly. Phase 3: mint a
+# user + access token on every fresh app so the returned client has
+# auth for every request.
 # ---------------------------------------------------------------------------
+
+
+class _PropertyAuthClient:
+    """Flask test client that always sends ``Authorization: Bearer <token>``."""
+
+    def __init__(self, inner, token):
+        self._inner = inner
+        self._auth = {"Authorization": f"Bearer {token}"}
+
+    def _merge(self, headers):
+        out = dict(self._auth)
+        if headers:
+            out.update(headers)
+        return out
+
+    def get(self, *a, headers=None, **kw):
+        return self._inner.get(*a, headers=self._merge(headers), **kw)
+
+    def post(self, *a, headers=None, **kw):
+        return self._inner.post(*a, headers=self._merge(headers), **kw)
+
+    def patch(self, *a, headers=None, **kw):
+        return self._inner.patch(*a, headers=self._merge(headers), **kw)
+
+    def delete(self, *a, headers=None, **kw):
+        return self._inner.delete(*a, headers=self._merge(headers), **kw)
+
+    def open(self, *a, headers=None, **kw):
+        return self._inner.open(*a, headers=self._merge(headers), **kw)
 
 
 def _fresh_client():
     app = create_app("test")
-    return app.test_client()
+    ext = app.extensions["skillbridge"]
+    # Register a user synchronously; use a stable email per-app since the
+    # app is itself fresh per Hypothesis example.
+    password_hash = ext.hasher.hash("correct horse battery staple")
+    with app.test_request_context():
+        app.preprocess_request()
+        user = ext.user_repo.create(
+            email="property-tester@example.com",
+            password_hash=password_hash,
+        )
+        app.do_teardown_request(None)
+    with app.app_context():
+        token = encode_access_token(user.id)
+    return _PropertyAuthClient(app.test_client(), token)
 
 
 # Hypothesis often doesn't play nicely with function-scoped fixtures; the

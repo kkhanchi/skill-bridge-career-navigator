@@ -72,8 +72,8 @@ def test_method_not_allowed_returns_envelope(client):
 # ---------------------------------------------------------------------------
 
 
-def test_broken_json_body_becomes_validation_failed(client):
-    response = client.post(
+def test_broken_json_body_becomes_validation_failed(authenticated_client):
+    response = authenticated_client.post(
         "/api/v1/profiles",
         data="{not valid json",
         content_type="application/json",
@@ -88,11 +88,11 @@ def test_broken_json_body_becomes_validation_failed(client):
     assert isinstance(body["error"]["details"]["errors"], list)
 
 
-def test_non_json_content_type_still_becomes_validation_failed(client):
+def test_non_json_content_type_still_becomes_validation_failed(authenticated_client):
     # No Content-Type, plain string body — request.get_json(silent=True)
     # returns None which the validator treats as {} and fails required
     # field checks (VALIDATION_FAILED), not 415.
-    response = client.post("/api/v1/profiles", data="not even json")
+    response = authenticated_client.post("/api/v1/profiles", data="not even json")
 
     assert response.status_code == 400
     _assert_envelope(response.get_json(), expected_code="VALIDATION_FAILED")
@@ -145,7 +145,7 @@ def test_unhandled_exception_returns_500_internal_error(app_with_boom_route):
 # ---------------------------------------------------------------------------
 
 
-def test_error_codes_used_by_framework_are_in_the_valid_set(client):
+def test_error_codes_used_by_framework_are_in_the_valid_set(authenticated_client):
     """Sweep the endpoints that emit each error code and confirm each
     reported code is in our known set. Catches accidental typos when
     new error codes are introduced later."""
@@ -163,9 +163,9 @@ def test_error_codes_used_by_framework_are_in_the_valid_set(client):
 
     for method, path, body, expected_status in sweep:
         if body is None:
-            response = client.open(method=method, path=path)
+            response = authenticated_client.open(method=method, path=path)
         else:
-            response = client.open(method=method, path=path, json=body)
+            response = authenticated_client.open(method=method, path=path, json=body)
 
         assert response.status_code == expected_status, (
             f"{method} {path} expected {expected_status}, got {response.status_code}"

@@ -73,22 +73,22 @@ def _seed_job(sql_app, **overrides) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_profile_crud_round_trip_on_sql_backend(sql_client):
+def test_profile_crud_round_trip_on_sql_backend(authenticated_sql_client):
     # POST -> 201 and id is a uuid4 hex.
-    created = sql_client.post("/api/v1/profiles", json=VALID_PROFILE)
+    created = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE)
     assert created.status_code == 201
     body = created.get_json()
     profile_id = body["id"]
     assert len(profile_id) == 32
 
     # GET -> 200 with equal fields.
-    fetched = sql_client.get(f"/api/v1/profiles/{profile_id}")
+    fetched = authenticated_sql_client.get(f"/api/v1/profiles/{profile_id}")
     assert fetched.status_code == 200
     for field in ("name", "skills", "experience_years", "education", "target_role"):
         assert fetched.get_json()[field] == body[field]
 
     # PATCH -> 200 and updated_at refreshed.
-    patched = sql_client.patch(
+    patched = authenticated_sql_client.patch(
         f"/api/v1/profiles/{profile_id}",
         json={"added_skills": ["Docker"]},
     )
@@ -97,14 +97,14 @@ def test_profile_crud_round_trip_on_sql_backend(sql_client):
     assert patched.get_json()["updated_at"] >= body["updated_at"]
 
     # DELETE -> 204 then 404.
-    deleted = sql_client.delete(f"/api/v1/profiles/{profile_id}")
+    deleted = authenticated_sql_client.delete(f"/api/v1/profiles/{profile_id}")
     assert deleted.status_code == 204
-    gone = sql_client.get(f"/api/v1/profiles/{profile_id}")
+    gone = authenticated_sql_client.get(f"/api/v1/profiles/{profile_id}")
     assert gone.status_code == 404
 
 
-def test_profile_get_returns_404_for_unknown_id(sql_client):
-    response = sql_client.get(f"/api/v1/profiles/{uuid4().hex}")
+def test_profile_get_returns_404_for_unknown_id(authenticated_sql_client):
+    response = authenticated_sql_client.get(f"/api/v1/profiles/{uuid4().hex}")
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
 
@@ -144,15 +144,15 @@ def test_list_jobs_empty_catalog_returns_empty_envelope(sql_client):
 # ---------------------------------------------------------------------------
 
 
-def test_analysis_roadmap_chain_on_sql_backend(sql_client, sql_app):
+def test_analysis_roadmap_chain_on_sql_backend(authenticated_sql_client, sql_app):
     _seed_job(sql_app)
 
     # Create profile.
-    profile = sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
+    profile = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
     assert profile["id"]
 
     # Create analysis.
-    analysis = sql_client.post(
+    analysis = authenticated_sql_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
@@ -160,7 +160,7 @@ def test_analysis_roadmap_chain_on_sql_backend(sql_client, sql_app):
     assert analysis["gap"]["match_percentage"] == 50  # Python, SQL matched; REST APIs, Git missing
 
     # Create roadmap.
-    roadmap_resp = sql_client.post(
+    roadmap_resp = authenticated_sql_client.post(
         "/api/v1/roadmaps",
         json={"analysis_id": analysis["id"]},
     )
@@ -182,7 +182,7 @@ def test_analysis_roadmap_chain_on_sql_backend(sql_client, sql_app):
 # ---------------------------------------------------------------------------
 
 
-def test_patch_resource_persists_across_sessions(sql_client, sql_app):
+def test_patch_resource_persists_across_sessions(authenticated_sql_client, sql_app):
     """Catches the missing-flag_modified bug.
 
     Without ``flag_modified(row, "phases")``, the PATCH returns 200 in
@@ -195,12 +195,12 @@ def test_patch_resource_persists_across_sessions(sql_client, sql_app):
     _seed_job(sql_app)
 
     # Full chain to get a roadmap id + resource id.
-    profile = sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
-    analysis = sql_client.post(
+    profile = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
+    analysis = authenticated_sql_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
-    roadmap = sql_client.post(
+    roadmap = authenticated_sql_client.post(
         "/api/v1/roadmaps",
         json={"analysis_id": analysis["id"]},
     ).get_json()
@@ -213,7 +213,7 @@ def test_patch_resource_persists_across_sessions(sql_client, sql_app):
             break
     assert first_resource is not None
 
-    patched = sql_client.patch(
+    patched = authenticated_sql_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/{first_resource['id']}",
         json={"completed": True},
     )
@@ -237,8 +237,8 @@ def test_patch_resource_persists_across_sessions(sql_client, sql_app):
         )
 
 
-def test_patch_roadmap_returns_404_for_missing_roadmap(sql_client):
-    response = sql_client.patch(
+def test_patch_roadmap_returns_404_for_missing_roadmap(authenticated_sql_client):
+    response = authenticated_sql_client.patch(
         f"/api/v1/roadmaps/{uuid4().hex}/resources/any",
         json={"completed": True},
     )
@@ -247,19 +247,19 @@ def test_patch_roadmap_returns_404_for_missing_roadmap(sql_client):
 
 
 def test_patch_roadmap_resource_not_found_distinguished_from_missing_roadmap(
-    sql_client, sql_app
+    authenticated_sql_client, sql_app
 ):
     _seed_job(sql_app)
-    profile = sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
-    analysis = sql_client.post(
+    profile = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
+    analysis = authenticated_sql_client.post(
         "/api/v1/analyses",
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
-    roadmap = sql_client.post(
+    roadmap = authenticated_sql_client.post(
         "/api/v1/roadmaps", json={"analysis_id": analysis["id"]},
     ).get_json()
 
-    response = sql_client.patch(
+    response = authenticated_sql_client.patch(
         f"/api/v1/roadmaps/{roadmap['id']}/resources/totally-bogus",
         json={"completed": True},
     )

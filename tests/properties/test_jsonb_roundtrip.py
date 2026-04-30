@@ -19,7 +19,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.db.models import ProfileORM
+from app.db.models import ProfileORM, UserORM
 
 
 @settings(
@@ -39,12 +39,18 @@ def test_skills_json_round_trip(skills):
     try:
         Base.metadata.create_all(engine)
         profile_id = uuid4().hex
+        user_id = uuid4().hex
 
-        # Write in one session.
+        # Write in one session. Phase 3 requires profiles.user_id NOT
+        # NULL, so we seed a user first to satisfy the FK.
         with Session(engine) as session:
+            session.add(
+                UserORM(id=user_id, email=f"{user_id}@example.com", password_hash="x")
+            )
             session.add(
                 ProfileORM(
                     id=profile_id,
+                    user_id=user_id,
                     name="Test",
                     skills=list(skills),
                     experience_years=0,

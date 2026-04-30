@@ -69,18 +69,21 @@ class UserORM(Base):
 class ProfileORM(Base):
     """User's career profile.
 
-    ``user_id`` stays nullable in Phase 2 — Phase 3 flips it to NOT NULL
-    after backfilling existing rows. ``skills`` is a JSON list of
-    strings; per-skill validation happens at the Pydantic layer.
+    Phase 3 (migration 0002) flipped ``user_id`` to NOT NULL with
+    ``ON DELETE CASCADE``. Rows written via the Phase 1/2 ``create``
+    method (no user_id) are no longer valid — handlers now call
+    ``create_for_user`` which stamps ``user_id`` from ``current_user.id``.
+    The ORM declaration here mirrors the migrated schema so
+    autogenerate doesn't flag drift on the next migration.
     """
 
     __tablename__ = "profiles"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         String(32),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -141,10 +144,10 @@ class AnalysisORM(Base):
     __tablename__ = "analyses"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(
+    user_id: Mapped[str] = mapped_column(
         String(32),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     profile_id: Mapped[str | None] = mapped_column(
         String(32),

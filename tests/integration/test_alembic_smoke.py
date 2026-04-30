@@ -75,9 +75,16 @@ def test_upgrade_head_creates_expected_tables_and_indexes(tmp_path):
 
     tables, indexes, uniques = _introspect(f"sqlite:///{db_file}")
     # Alembic adds its own `alembic_version` bookkeeping table — we
-    # assert the Phase 2 set is a subset of whatever's present.
-    expected_phase_2 = {"users", "profiles", "jobs", "analyses", "roadmaps"}
-    assert expected_phase_2.issubset(tables)
+    # assert the Phase 2 + Phase 3 set is a subset of whatever's present.
+    expected = {
+        "users",
+        "profiles",
+        "jobs",
+        "analyses",
+        "roadmaps",
+        "refresh_tokens",
+    }
+    assert expected.issubset(tables)
 
     # R1.2: verify every expected column-level index is present.
     assert ("user_id",) in indexes["profiles"]
@@ -86,11 +93,33 @@ def test_upgrade_head_creates_expected_tables_and_indexes(tmp_path):
     assert ("profile_id",) in indexes["analyses"]
     assert ("job_id",) in indexes["analyses"]
     assert ("analysis_id",) in indexes["roadmaps"]
+    # Phase 3: refresh_tokens.user_id is explicitly indexed.
+    assert ("user_id",) in indexes["refresh_tokens"]
 
     # UNIQUE on users.email surfaces via get_unique_constraints, not
     # get_indexes (SQLite represents UNIQUE as a constraint rather than
     # an index with unique=True).
     assert ("email",) in uniques["users"]
+    # Phase 3: UNIQUE on refresh_tokens.jti likewise.
+    assert ("jti",) in uniques["refresh_tokens"]
+
+    # Phase 3 (migration 0002): profiles.user_id and analyses.user_id
+    # are NOT NULL after the flip.
+    from sqlalchemy import create_engine, inspect as sa_inspect
+
+    eng = create_engine(f"sqlite:///{db_file}")
+    try:
+        insp = sa_inspect(eng)
+        profiles_user_id = next(
+            c for c in insp.get_columns("profiles") if c["name"] == "user_id"
+        )
+        assert profiles_user_id["nullable"] is False
+        analyses_user_id = next(
+            c for c in insp.get_columns("analyses") if c["name"] == "user_id"
+        )
+        assert analyses_user_id["nullable"] is False
+    finally:
+        eng.dispose()
 
 
 def test_upgrade_downgrade_round_trip_is_symmetric(tmp_path):
@@ -105,11 +134,16 @@ def test_upgrade_downgrade_round_trip_is_symmetric(tmp_path):
 
     command.downgrade(config, "base")
     tables_empty, _, _ = _introspect(f"sqlite:///{db_file}")
-    # After downgrade base, no Phase 2 tables remain (alembic's own
-    # version table may still exist — that's fine, we only assert the
-    # Phase 2 set is gone).
+    # After downgrade base, no Phase 2/3 tables remain.
     assert tables_empty.isdisjoint(
-        {"users", "profiles", "jobs", "analyses", "roadmaps"}
+        {
+            "users",
+            "profiles",
+            "jobs",
+            "analyses",
+            "roadmaps",
+            "refresh_tokens",
+        }
     )
 
     command.upgrade(config, "head")
@@ -120,7 +154,7 @@ def test_upgrade_downgrade_round_trip_is_symmetric(tmp_path):
     assert uniques_again == uniques_first
 
 
-def test_downgrade_base_reverses_all_phase_2_tables(tmp_path):
+def test_downgrade_base_reverses_all_tables(tmp_path):
     db_file = tmp_path / "alembic_downgrade.db"
     config = _build_alembic_config(db_file)
 
@@ -128,8 +162,12 @@ def test_downgrade_base_reverses_all_phase_2_tables(tmp_path):
     command.downgrade(config, "base")
 
     tables, _, _ = _introspect(f"sqlite:///{db_file}")
-    assert "users" not in tables
-    assert "profiles" not in tables
-    assert "jobs" not in tables
-    assert "analyses" not in tables
-    assert "roadmaps" not in tables
+    for table in (
+        "users",
+        "profiles",
+        "jobs",
+        "analyses",
+        "roadmaps",
+        "refresh_tokens",
+    ):
+        assert table not in tables

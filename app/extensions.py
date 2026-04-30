@@ -35,6 +35,7 @@ from app.core.job_catalog import load_jobs
 from app.core.models import LearningResource
 from app.core.resume_parser import load_taxonomy
 from app.core.roadmap_generator import _load_resources
+from app.auth.hashing import Argon2Hasher
 from app.db.engine import build_engine
 from app.db.session import set_session_factory
 from app.repositories.analysis_repo import InMemoryAnalysisRepository
@@ -42,15 +43,21 @@ from app.repositories.base import (
     AnalysisRepository,
     JobRepository,
     ProfileRepository,
+    RefreshTokenRepository,
     RoadmapRepository,
+    UserRepository,
 )
 from app.repositories.job_repo import InMemoryJobRepository
 from app.repositories.profile_repo import InMemoryProfileRepository
+from app.repositories.refresh_token_repo import InMemoryRefreshTokenRepository
 from app.repositories.roadmap_repo import InMemoryRoadmapRepository
 from app.repositories.sql_analysis_repo import SqlAlchemyAnalysisRepository
 from app.repositories.sql_job_repo import SqlAlchemyJobRepository
 from app.repositories.sql_profile_repo import SqlAlchemyProfileRepository
+from app.repositories.sql_refresh_token_repo import SqlAlchemyRefreshTokenRepository
 from app.repositories.sql_roadmap_repo import SqlAlchemyRoadmapRepository
+from app.repositories.sql_user_repo import SqlAlchemyUserRepository
+from app.repositories.user_repo import InMemoryUserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +143,10 @@ class Extensions:
     job_repo: JobRepository
     analysis_repo: AnalysisRepository
     roadmap_repo: RoadmapRepository
+    # Phase 3: auth-related repositories + argon2 hasher.
+    user_repo: UserRepository
+    refresh_token_repo: RefreshTokenRepository
+    hasher: Argon2Hasher
     taxonomy: list[str]
     resources: list[LearningResource]
     categorizer: SkillCategorizerInterface
@@ -185,6 +196,20 @@ def _select_categorizer(app: Flask) -> SkillCategorizerInterface:
 # ---------------------------------------------------------------------------
 
 
+def _build_hasher(app: Flask) -> Argon2Hasher:
+    """Construct the per-app argon2 hasher from config.
+
+    Building one hasher per app (not per request) keeps the dummy-hash
+    computation — the ~50ms argon2 call used by the constant-time
+    login flow — to a single startup hit.
+    """
+    return Argon2Hasher(
+        time_cost=int(app.config["ARGON2_TIME_COST"]),
+        memory_cost=int(app.config["ARGON2_MEMORY_COST"]),
+        parallelism=int(app.config["ARGON2_PARALLELISM"]),
+    )
+
+
 def _build_memory_extensions(app: Flask) -> Extensions:
     """Phase 1 flow: in-memory repositories over JSON data."""
     jobs_path = app.config["JOBS_PATH"]
@@ -200,6 +225,9 @@ def _build_memory_extensions(app: Flask) -> Extensions:
         job_repo=InMemoryJobRepository(jobs),
         analysis_repo=InMemoryAnalysisRepository(),
         roadmap_repo=InMemoryRoadmapRepository(),
+        user_repo=InMemoryUserRepository(),
+        refresh_token_repo=InMemoryRefreshTokenRepository(),
+        hasher=_build_hasher(app),
         taxonomy=taxonomy,
         resources=resources,
         categorizer=_select_categorizer(app),
@@ -238,6 +266,9 @@ def _build_sql_extensions(app: Flask, backend: str) -> Extensions:
         job_repo=SqlAlchemyJobRepository(),
         analysis_repo=SqlAlchemyAnalysisRepository(),
         roadmap_repo=SqlAlchemyRoadmapRepository(),
+        user_repo=SqlAlchemyUserRepository(),
+        refresh_token_repo=SqlAlchemyRefreshTokenRepository(),
+        hasher=_build_hasher(app),
         taxonomy=taxonomy,
         resources=resources,
         categorizer=_select_categorizer(app),

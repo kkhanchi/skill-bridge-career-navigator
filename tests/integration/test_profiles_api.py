@@ -26,9 +26,9 @@ VALID_PAYLOAD = {
 }
 
 
-def _create(client, **overrides):
+def _create(authenticated_client, **overrides):
     payload = {**VALID_PAYLOAD, **overrides}
-    response = client.post("/api/v1/profiles", json=payload)
+    response = authenticated_client.post("/api/v1/profiles", json=payload)
     return response
 
 
@@ -37,8 +37,8 @@ def _create(client, **overrides):
 # ---------------------------------------------------------------------------
 
 
-def test_post_creates_profile_and_returns_201(client):
-    response = _create(client)
+def test_post_creates_profile_and_returns_201(authenticated_client):
+    response = _create(authenticated_client)
 
     assert response.status_code == 201
     body = response.get_json()
@@ -51,8 +51,8 @@ def test_post_creates_profile_and_returns_201(client):
     assert response.headers["X-Correlation-ID"]
 
 
-def test_post_rejects_empty_skills_with_validation_failed(client):
-    response = _create(client, skills=[])
+def test_post_rejects_empty_skills_with_validation_failed(authenticated_client):
+    response = _create(authenticated_client, skills=[])
 
     assert response.status_code == 400
     body = response.get_json()
@@ -62,23 +62,23 @@ def test_post_rejects_empty_skills_with_validation_failed(client):
     assert "errors" in body["error"]["details"]
 
 
-def test_post_rejects_unknown_field_with_validation_failed(client):
+def test_post_rejects_unknown_field_with_validation_failed(authenticated_client):
     # Schema is strict (extra="forbid") — stray fields fail validation.
-    response = _create(client, shoe_size=12)
+    response = _create(authenticated_client, shoe_size=12)
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_post_rejects_negative_experience_years(client):
-    response = _create(client, experience_years=-1)
+def test_post_rejects_negative_experience_years(authenticated_client):
+    response = _create(authenticated_client, experience_years=-1)
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_post_rejects_broken_json_body_with_validation_failed(client):
-    response = client.post(
+def test_post_rejects_broken_json_body_with_validation_failed(authenticated_client):
+    response = authenticated_client.post(
         "/api/v1/profiles",
         data="{not json",
         content_type="application/json",
@@ -88,11 +88,11 @@ def test_post_rejects_broken_json_body_with_validation_failed(client):
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_post_round_trip_get_returns_matching_body(client):
-    created = _create(client).get_json()
+def test_post_round_trip_get_returns_matching_body(authenticated_client):
+    created = _create(authenticated_client).get_json()
     profile_id = created["id"]
 
-    fetched = client.get(f"/api/v1/profiles/{profile_id}")
+    fetched = authenticated_client.get(f"/api/v1/profiles/{profile_id}")
 
     assert fetched.status_code == 200
     body = fetched.get_json()
@@ -106,8 +106,8 @@ def test_post_round_trip_get_returns_matching_body(client):
 # ---------------------------------------------------------------------------
 
 
-def test_get_returns_404_not_found_for_unknown_id(client):
-    response = client.get("/api/v1/profiles/does-not-exist")
+def test_get_returns_404_not_found_for_unknown_id(authenticated_client):
+    response = authenticated_client.get("/api/v1/profiles/does-not-exist")
 
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
@@ -119,10 +119,10 @@ def test_get_returns_404_not_found_for_unknown_id(client):
 # ---------------------------------------------------------------------------
 
 
-def test_patch_applies_added_skills(client):
-    created = _create(client).get_json()
+def test_patch_applies_added_skills(authenticated_client):
+    created = _create(authenticated_client).get_json()
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/profiles/{created['id']}",
         json={"added_skills": ["Docker"]},
     )
@@ -135,10 +135,10 @@ def test_patch_applies_added_skills(client):
     assert body["updated_at"] >= created["updated_at"]
 
 
-def test_patch_applies_direct_field_override(client):
-    created = _create(client).get_json()
+def test_patch_applies_direct_field_override(authenticated_client):
+    created = _create(authenticated_client).get_json()
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/profiles/{created['id']}",
         json={"name": "Renamed User"},
     )
@@ -147,17 +147,17 @@ def test_patch_applies_direct_field_override(client):
     assert response.get_json()["name"] == "Renamed User"
 
 
-def test_patch_rejects_empty_body_with_validation_failed(client):
-    created = _create(client).get_json()
+def test_patch_rejects_empty_body_with_validation_failed(authenticated_client):
+    created = _create(authenticated_client).get_json()
 
-    response = client.patch(f"/api/v1/profiles/{created['id']}", json={})
+    response = authenticated_client.patch(f"/api/v1/profiles/{created['id']}", json={})
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-def test_patch_returns_404_for_unknown_id(client):
-    response = client.patch(
+def test_patch_returns_404_for_unknown_id(authenticated_client):
+    response = authenticated_client.patch(
         "/api/v1/profiles/does-not-exist",
         json={"name": "Whoever"},
     )
@@ -166,13 +166,13 @@ def test_patch_returns_404_for_unknown_id(client):
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_patch_surfaces_profile_invalid_on_domain_error(client):
+def test_patch_surfaces_profile_invalid_on_domain_error(authenticated_client):
     """Removing every skill leaves the profile with 0 skills, which the
     core layer rejects as a domain-level validation error (400
     PROFILE_INVALID, distinct from schema-level VALIDATION_FAILED)."""
-    created = _create(client).get_json()
+    created = _create(authenticated_client).get_json()
 
-    response = client.patch(
+    response = authenticated_client.patch(
         f"/api/v1/profiles/{created['id']}",
         json={"removed_skills": created["skills"]},
     )
@@ -186,23 +186,23 @@ def test_patch_surfaces_profile_invalid_on_domain_error(client):
 # ---------------------------------------------------------------------------
 
 
-def test_delete_returns_204_and_removes_profile(client):
-    created = _create(client).get_json()
+def test_delete_returns_204_and_removes_profile(authenticated_client):
+    created = _create(authenticated_client).get_json()
     profile_id = created["id"]
 
-    response = client.delete(f"/api/v1/profiles/{profile_id}")
+    response = authenticated_client.delete(f"/api/v1/profiles/{profile_id}")
 
     assert response.status_code == 204
     # Body should be empty on 204.
     assert response.data in (b"", b"\n")
 
     # Subsequent GET returns 404.
-    follow_up = client.get(f"/api/v1/profiles/{profile_id}")
+    follow_up = authenticated_client.get(f"/api/v1/profiles/{profile_id}")
     assert follow_up.status_code == 404
 
 
-def test_delete_returns_404_for_unknown_id(client):
-    response = client.delete("/api/v1/profiles/does-not-exist")
+def test_delete_returns_404_for_unknown_id(authenticated_client):
+    response = authenticated_client.delete("/api/v1/profiles/does-not-exist")
 
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
