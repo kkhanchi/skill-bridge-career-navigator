@@ -28,6 +28,14 @@ VALID_ERROR_CODES = {
     # the error-contract ADR.
     "METHOD_NOT_ALLOWED",
     "UNSUPPORTED_MEDIA_TYPE",
+    # Phase 3 additions (R14.2). These six extend the closed set;
+    # no other codes are introduced in Phase 3.
+    "AUTH_REQUIRED",
+    "INVALID_CREDENTIALS",
+    "TOKEN_EXPIRED",
+    "TOKEN_INVALID",
+    "EMAIL_TAKEN",
+    "RATE_LIMITED",
 }
 
 
@@ -176,3 +184,75 @@ def test_error_codes_used_by_framework_are_in_the_valid_set(authenticated_client
             f"{method} {path} returned unknown code {payload['error']['code']!r}"
         )
         assert response.headers["X-Correlation-ID"]
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 error-envelope sweeps (R14.1, R14.2, R14.6)
+# ---------------------------------------------------------------------------
+
+
+def test_phase3_auth_failure_codes_are_in_the_valid_set(client):
+    """Every /auth/* 4xx path produces a code that's in the closed set."""
+    import jwt  # local import — only needed for forged-secret probe
+
+    # Register once so the duplicate + login paths have something to hit.
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "alice@example.com", "password": "correct horse battery staple"},
+    )
+
+    # Each entry: (method, path, body-or-None, kwargs-for-client,
+    # expected-status, expected-code).
+    auth_probes = [
+        # 401 AUTH_REQUIRED
+        ("GET", "/api/v1/auth/me", None, {}, 401, "AUTH_REQUIRED"),
+        # 401 TOKEN_INVALID — malformed access
+        ("GET", "/api/v1/auth/me", None,
+         {"headers": {"Authorization": "Bearer not.a.jwt"}},
+         401, "TOKEN_INVALID"),
+        # 401 INVALID_CREDENTIALS
+        ("POST", "/api/v1/auth/login",
+         {"email": "alice@example.com", "password": "wrongpass123"},
+         {}, 401, "INVALID_CREDENTIALS"),
+        # 409 EMAIL_TAKEN — register the same email twice.
+        ("POST", "/api/v1/auth/register",
+         {"email": "alice@example.com", "password": "correct horse battery staple"},
+         {}, 409, "EMAIL_TAKEN"),
+        # 400 VALIDATION_FAILED on malformed register body
+        ("POST", "/api/v1/auth/register", {"email": "not-an-email"}, {}, 400,
+         "VALIDATION_FAILED"),
+    ]
+
+    for method, path, body, kwargs, expected_status, expected_code in auth_probes:
+        call_kwargs = dict(kwargs)
+        if body is not None:
+            call_kwargs["json"] = body
+        response = client.open(method=method, path=path, **call_kwargs)
+
+        assert response.status_code == expected_status, (
+            f"{method} {path} expected {expected_status}, got {response.status_code}"
+        )
+        payload = response.get_json()
+        _assert_envelope(payload, expected_code=expected_code)
+        assert payload["error"]["code"] in VALID_ERROR_CODES
+        # R14.1: every 4xx carries the correlation id header.
+        assert response.headers["X-Correlation-ID"]
+
+
+def test_phase3_rate_limit_response_is_in_the_valid_set(client):
+    """R14.2: the RATE_LIMITED code lands in the closed set."""
+    for i in range(5):
+        client.post(
+            "/api/v1/auth/register",
+            json={"email": f"u{i}@example.com", "password": "correct horse battery staple"},
+        )
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "u6@example.com", "password": "correct horse battery staple"},
+    )
+    assert response.status_code == 429
+    payload = response.get_json()
+    _assert_envelope(payload, expected_code="RATE_LIMITED")
+    assert payload["error"]["code"] in VALID_ERROR_CODES
+    assert response.headers["X-Correlation-ID"]
