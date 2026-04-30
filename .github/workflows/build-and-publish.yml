@@ -1,0 +1,109 @@
+# Build & publish the SkillBridge container image to GHCR.
+#
+# Runs on:
+#   - push to main
+#   - tag pushes matching v*.*.*
+#   - manual dispatch
+#
+# Predicated on the quality-gate workflow (ci.yml) passing for the
+# same commit — see the wait-for-ci job below. We never publish an
+# image from a commit that didn't clear lint/typecheck/tests.
+#
+# Image naming:
+#   - ghcr.io/<owner>/<repo>:latest          (default branch only)
+#   - ghcr.io/<owner>/<repo>:sha-<short>     (every build)
+#   - ghcr.io/<owner>/<repo>:<semver>        (tag pushes)
+#
+# See ADR-019 for the GHCR-over-Docker-Hub decision.
+
+name: Build & Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+# Never cancel in-progress tag builds — a tag push is a release
+# event, not something to overwrite. Main-branch pushes DO cancel
+# earlier runs because the latest SHA is the one we want published.
+concurrency:
+  group: build-and-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Block the publish job until the quality-gate workflow has
+  # finished for this SHA. lewagon/wait-on-check-action polls the
+  # checks API until the named check reports a conclusion.
+  wait-for-ci:
+    name: Wait for CI quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for ci.yml's quality-gate check
+        uses: lewagon/wait-on-check-action@v1.3.3
+        with:
+          ref: ${{ github.sha }}
+          # Must match the job-level `name:` on ci.yml's quality-gate.
+          check-name: "Lint / Typecheck / Test"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success
+
+  publish:
+    name: Build & push image
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    # Need `packages: write` so GITHUB_TOKEN can push to GHCR;
+    # default token scope is read-only for packages.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Derives the tag set + OCI annotations declaratively. Saves
+      # us from writing `if: github.ref == 'refs/heads/main'` guards
+      # at each tag-assignment step.
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=sha-
+            type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # The Dockerfile lives inside skill-bridge/, and its
+          # COPY instructions expect that directory as the build
+          # context.
+          context: skill-bridge
+          file: skill-bridge/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Reuse build layers across workflow runs. GHA's native
+          # cache exporter stores them in the run's cache storage;
+          # mode=max also caches intermediate builder layers.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
