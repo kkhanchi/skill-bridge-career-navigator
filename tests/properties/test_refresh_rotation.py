@@ -30,9 +30,14 @@ _PROPERTY_SETTINGS = settings(
 )
 
 
-# Strategy: passwords that pass the 8..128 non-whitespace validator.
+# Strategy: passwords that pass the 8..128 non-whitespace validator
+# AND survive Pydantic's str_strip_whitespace normalization with at
+# least 8 chars remaining. Without the post-strip filter, Hypothesis
+# finds passwords like "0000000\r" — 8 chars literal, 7 after strip,
+# which fails the schema's min_length=8 check.
 _password_strategy = (
-    text(min_size=8, max_size=40).filter(lambda s: s.strip() != "")
+    text(min_size=8, max_size=40)
+    .filter(lambda s: len(s.strip()) >= 8 and len(s) <= 128)
 )
 
 

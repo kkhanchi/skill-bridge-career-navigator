@@ -30,7 +30,8 @@ _PROPERTY_SETTINGS = settings(
 )
 
 _password_strategy = (
-    text(min_size=8, max_size=40).filter(lambda s: s.strip() != "")
+    text(min_size=8, max_size=40)
+    .filter(lambda s: len(s.strip()) >= 8 and len(s) <= 128)
 )
 
 
