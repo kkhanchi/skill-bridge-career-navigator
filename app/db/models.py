@@ -201,3 +201,52 @@ class RoadmapORM(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class RefreshTokenORM(Base):
+    """A single refresh-token grant (Phase 3).
+
+    One row per issued refresh token. We never store the token string
+    itself — only its ``jti`` (the JWT's unique id claim). Verifying a
+    refresh request:
+
+    1. Decode the presented JWT -> extract jti.
+    2. Look the row up by jti.
+    3. Row exists, not expired, ``revoked_at IS NULL`` -> accept.
+
+    Rotation-on-refresh sets ``revoked_at = now()`` on the old row and
+    inserts a new row for the replacement token. Reuse of a revoked
+    jti is treated identically to an unknown jti — both return 401
+    TOKEN_INVALID. (See design §Open Question Q3 on theft detection.)
+
+    ``user_id`` uses ON DELETE CASCADE: deleting a user wipes their
+    token grants.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # jti is the claim we look up by; unique so a forged duplicate
+    # cannot collide with an existing row.
+    jti: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    # Null until the token is revoked. A NOT NULL value timestamps the
+    # revocation for audit / future theft-detection windows.
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

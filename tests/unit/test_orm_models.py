@@ -3,14 +3,15 @@
 Introspects the schema SQLAlchemy produces from the ORM definitions
 and asserts the design matches the requirements:
 
-- Exactly five tables exist.
+- Exactly six tables exist (five Phase 2 tables + refresh_tokens
+  added in Phase 3 Stage E).
 - Indexes land where R1.2 lists them.
 - Column types match R1.3 (String widths, Text for description,
   Integer for years, DateTime(timezone=True) for timestamps).
 - Portable JSON columns actually round-trip list[str] values (R7.4).
 - UNIQUE on users.email is enforced at the DB layer.
 
-Requirement reference: R1.1, R1.2, R1.3, R1.7, R7.4.
+Requirement reference: R1.1, R1.2, R1.3, R1.7, R7.4, R11.3.
 """
 
 from __future__ import annotations
@@ -21,7 +22,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
-from app.db.models import AnalysisORM, JobORM, ProfileORM, RoadmapORM, UserORM
+from app.db.models import (
+    AnalysisORM,
+    JobORM,
+    ProfileORM,
+    RefreshTokenORM,
+    RoadmapORM,
+    UserORM,
+)
 
 
 @pytest.fixture
@@ -44,9 +52,17 @@ def session(engine):
 # ---------------------------------------------------------------------------
 
 
-def test_create_all_produces_exactly_five_tables(engine):
+def test_create_all_produces_exactly_six_tables(engine):
+    # Phase 2 produced five; Phase 3 Stage E added ``refresh_tokens``.
     tables = set(inspect(engine).get_table_names())
-    assert tables == {"users", "profiles", "jobs", "analyses", "roadmaps"}
+    assert tables == {
+        "users",
+        "profiles",
+        "jobs",
+        "analyses",
+        "roadmaps",
+        "refresh_tokens",
+    }
 
 
 def test_expected_indexes_exist(engine):
@@ -59,9 +75,17 @@ def test_expected_indexes_exist(engine):
         ("analyses", "profile_id"),
         ("analyses", "job_id"),
         ("roadmaps", "analysis_id"),
+        ("refresh_tokens", "user_id"),
     }
     actual = set()
-    for table in ("users", "profiles", "jobs", "analyses", "roadmaps"):
+    for table in (
+        "users",
+        "profiles",
+        "jobs",
+        "analyses",
+        "roadmaps",
+        "refresh_tokens",
+    ):
         for idx in insp.get_indexes(table):
             # Single-column indexes we explicitly declared with index=True.
             if len(idx["column_names"]) == 1:
