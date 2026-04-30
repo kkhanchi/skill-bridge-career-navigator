@@ -65,6 +65,20 @@ PY
     fi
 fi
 
+echo "[entrypoint v2] Seeding jobs catalog (idempotent)"
+# seed_db.py is idempotent — reruns against an unchanged jobs.json
+# are a no-op. Run it on every boot so an empty DB (fresh Render
+# deploy) gets populated without manual intervention. Failures are
+# logged but don't abort startup; the API still serves without
+# catalog rows (just shows an empty list).
+set +e
+python -m scripts.seed_db
+seed_rc=$?
+set -e
+if [ "$seed_rc" != "0" ]; then
+    echo "[entrypoint v2] WARNING: seed script exited $seed_rc — continuing anyway"
+fi
+
 echo "[entrypoint v2] Starting gunicorn on 0.0.0.0:${PORT:-5000}"
 exec gunicorn \
     --bind "0.0.0.0:${PORT:-5000}" \
