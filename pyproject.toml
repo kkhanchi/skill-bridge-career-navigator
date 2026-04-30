@@ -1,0 +1,164 @@
+# Project metadata + tooling configuration for the SkillBridge
+# backend (Phase 4). Single source of truth for Ruff, mypy,
+# pytest, and coverage; no `.coveragerc` / `mypy.ini` /
+# `pytest.ini` / `setup.cfg` anywhere in the tree.
+#
+# Dependencies are NOT listed under [project] — requirements.txt
+# stays the source of truth for runtime + dev deps. If we move to
+# `uv` / `hatch` in Phase 5+, the project block grows then.
+
+[project]
+name = "skill-bridge"
+version = "0.4.0"
+description = "SkillBridge Career Navigator — production-quality backend API."
+requires-python = ">=3.12"
+
+
+# ---------------------------------------------------------------------------
+# Ruff — lint + format (replaces Black + isort + flake8).
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Curated rule set. Each family is commented so future contributors
+# can see the rationale.
+select = [
+    "E", "W",    # pycodestyle — style + whitespace
+    "F",         # Pyflakes — unused imports, undefined names
+    "I",         # isort — import ordering
+    "B",         # flake8-bugbear — likely-bug patterns
+    "UP",        # pyupgrade — modern syntax (py3.12 features)
+    "SIM",       # flake8-simplify — redundant-idiom detection
+]
+ignore = [
+    # Line length is formatter-enforced; lint-level errors on it
+    # create churn when the formatter would already fix them.
+    "E501",
+    # Flask views legitimately use function calls in decorator
+    # arguments (e.g. `@limiter.limit(Value())`). Overruled globally.
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `assert` is idiomatic in pytest tests — Ruff's S101 (bandit's
+# "assert used") would flag every test. Suppressed only under
+# tests/.
+"tests/**" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+
+# ---------------------------------------------------------------------------
+# mypy — strict type checking across app/.
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# mypy walks the `files` list. Keep it narrow to `app/` so test
+# code doesn't pull us into Hypothesis stub gaps and factory-boy's
+# dynamic class generation.
+files = ["app"]
+exclude = [
+    "tests/",
+    # The Groq SDK has no type stubs and the AI engine's branches
+    # are integration-tested, not type-tested.
+    "app/core/ai_engine.py",
+]
+# Treat every # type: ignore without a code as an error — forces
+# reviewers to write `# type: ignore[specific-code]` with a reason.
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# Third-party libraries we use that don't ship type stubs.
+# `ignore_missing_imports = true` stops mypy from erroring on the
+# import line itself; individual call sites that want full types
+# still need a local cast or annotation.
+[[tool.mypy.overrides]]
+module = [
+    "argon2.*",
+    "flask_limiter.*",
+    "flask_cors.*",
+    "groq.*",
+    "alembic.*",
+    "factory.*",
+    "faker.*",
+]
+ignore_missing_imports = true
+
+# Legacy Phase 1 Streamlit shim modules at the repo root (NOT inside
+# app/). They re-export from app.core.* and aren't worth annotating
+# strictly. Phase 5+ cleanup candidate.
+[[tool.mypy.overrides]]
+module = [
+    "ai_engine",
+    "gap_analyzer",
+    "job_catalog",
+    "models",
+    "profile_manager",
+    "profile_printer",
+    "resume_parser",
+    "roadmap_generator",
+]
+ignore_errors = true
+
+
+# ---------------------------------------------------------------------------
+# Coverage — pytest-cov wraps this; `.coverage` / `coverage.xml`
+# are gitignored.
+# ---------------------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["app"]
+# Branch coverage: every decision branch counts as a coverage
+# target. A `if x:` without a test on the False side is flagged
+# even if the True side runs.
+branch = true
+omit = [
+    # The Groq integration path is hard to test without a real API
+    # key in CI. Unit tests cover FallbackCategorizer; Groq's
+    # happy path is exercised by an integration test that sits
+    # behind the opt-in GROQ_API_KEY env var.
+    "app/core/ai_engine.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
+# Lines matching these patterns don't count against coverage.
+exclude_lines = [
+    "pragma: no cover",
+    # Script-style entry guards.
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    # Protocol stub bodies are `...` on a single line — they're
+    # interface declarations, structurally uncoverable.
+    "^\\s*\\.\\.\\.\\s*$",
+]
+
+
+# ---------------------------------------------------------------------------
+# Pytest — moved from `tests/conftest.py` scatter into one place.
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    # Fail loudly if a test uses an unknown pytest marker.
+    "--strict-markers",
+    # Summary of all non-pass outcomes (x, f, E, s) at the end.
+    "-ra",
+]
+filterwarnings = [
+    # TestConfig's short JWT_SECRET triggers PyJWT's advisory
+    # warning on every token operation. Cosmetic in tests; the
+    # warning IS correct for prod (ADR-013's secret-management
+    # section covers it). Suppressed here to keep the test output
+    # readable.
+    "ignore:The HMAC key is.*:UserWarning",
+]

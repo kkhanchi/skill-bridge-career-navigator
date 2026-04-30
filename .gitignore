@@ -3,3 +3,13 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .hypothesis/
+
+# Phase 4 — Testing & Quality artifacts
+.coverage
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# Dev databases (Phase 2 leftover — keep gitignored so local runs
+# don't accidentally check in committed dev state).
+*.db
