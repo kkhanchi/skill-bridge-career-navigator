@@ -55,24 +55,37 @@ def _resolve_database_url() -> str:
          that drive Alembic programmatically).
       2. ``CONFIG_MAP[APP_ENV].DATABASE_URL`` from the app config layer.
 
+    Postgres URLs get rewritten from ``postgresql://...`` to
+    ``postgresql+psycopg://...`` so SQLAlchemy uses the bundled
+    psycopg3 driver. Mirrors the same rewrite in
+    :func:`app.db.engine.build_engine` — alembic doesn't go through
+    that factory, so it needs its own copy. Render's managed Postgres
+    hands us a bare ``postgresql://`` URL, which defaults to the
+    unavailable psycopg2 driver without this rewrite.
+
     Raises:
         RuntimeError: When neither is set — fail loud rather than run
             migrations against an unexpected default DB.
     """
     explicit = config.get_main_option("sqlalchemy.url")
     if explicit:
-        return explicit
+        url = explicit
+    else:
+        app_env = os.environ.get("APP_ENV", "dev").strip() or "dev"
+        if app_env not in CONFIG_MAP:
+            raise RuntimeError(f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}")
+        cfg = CONFIG_MAP[app_env]
+        url = str(getattr(cfg, "DATABASE_URL", "") or "").strip()
+        if not url:
+            raise RuntimeError(
+                f"DATABASE_URL is empty on APP_ENV={app_env!r}; set it in the "
+                f"environment or pass -x sqlalchemy.url=... to alembic."
+            )
 
-    app_env = os.environ.get("APP_ENV", "dev").strip() or "dev"
-    if app_env not in CONFIG_MAP:
-        raise RuntimeError(f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}")
-    cfg = CONFIG_MAP[app_env]
-    url = str(getattr(cfg, "DATABASE_URL", "") or "").strip()
-    if not url:
-        raise RuntimeError(
-            f"DATABASE_URL is empty on APP_ENV={app_env!r}; set it in the "
-            f"environment or pass -x sqlalchemy.url=... to alembic."
-        )
+    # Route bare postgresql:// URLs to psycopg3. Leaves
+    # postgresql+<driver>:// and non-postgres URLs untouched.
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
     return url
 
 
