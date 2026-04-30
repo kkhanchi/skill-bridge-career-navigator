@@ -1,0 +1,70 @@
+# Local orchestration for development.
+#
+# `docker compose up` starts the API container and a PostgreSQL
+# container. The API waits for Postgres to be ready before
+# starting (healthcheck-gated depends_on), then runs
+# `alembic upgrade head` inside its entrypoint before gunicorn
+# binds the port.
+#
+# This topology deliberately mirrors the Render topology (see
+# render.yaml) so "works in compose" predicts "works on Render."
+#
+# Usage:
+#   1. Copy .env.example to .env and set JWT_SECRET.
+#   2. `docker compose up`  (or `make compose-up` from this dir).
+#   3. `curl http://localhost:5000/health` should return 200.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: skillbridge
+      POSTGRES_USER: skillbridge
+      # The default here is safe for LOCAL DEV ONLY. The .env file
+      # (gitignored) can override; prod uses a Render-managed
+      # password via render.yaml's fromDatabase binding.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillbridge-local}
+    volumes:
+      # Named volume so `compose down` (without -v) preserves data.
+      # `compose down -v` wipes it if you want a clean slate.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready returns 0 when Postgres accepts connections.
+      # Interval + retries = a ~50s total wait budget before the
+      # dependent api service gives up.
+      test: ["CMD-SHELL", "pg_isready -U skillbridge -d skillbridge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    # 5432 is NOT published to the host by default — the api
+    # container reaches Postgres via the compose network. Uncomment
+    # below to connect with host psql / pgAdmin.
+    # ports:
+    #   - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Build the DATABASE_URL from the Postgres service's
+      # credentials — compose's DNS resolves "postgres" to the
+      # sibling container's IP.
+      DATABASE_URL: postgresql://skillbridge:${POSTGRES_PASSWORD:-skillbridge-local}@postgres:5432/skillbridge
+      APP_ENV: dev
+      # JWT_SECRET MUST be set for prod (ADR-013); local dev has
+      # a fallback so a fresh compose up doesn't fail at startup
+      # on a missing env var.
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-please-rotate}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+
+volumes:
+  postgres_data:

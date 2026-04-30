@@ -1,0 +1,41 @@
+# .dockerignore — keeps the build context small and prevents
+# accidentally copying secrets, test artifacts, or tool caches into
+# the image.
+
+# Version control
+.git
+.github
+.gitignore
+
+# Test + tool caches
+.pytest_cache
+.hypothesis
+.mypy_cache
+.ruff_cache
+__pycache__
+*.pyc
+.coverage
+coverage.xml
+
+# Local secrets + data
+.env
+*.db
+
+# Test code and dev-only tooling: they don't belong in the runtime
+# image. Ruff / mypy / pytest / factory-boy are not installed in
+# the runtime stage, so their configs are noise too.
+tests/
+Makefile
+.pre-commit-config.yaml
+pyproject.toml
+
+# Kiro spec files live at the workspace root (outside skill-bridge/),
+# but listing them here as a belt-and-suspenders guard against a
+# future compose change that widens the build context.
+.kiro/
+
+# Python distribution metadata that pip produces during install —
+# we don't ship that either.
+build/
+dist/
+*.egg-info/

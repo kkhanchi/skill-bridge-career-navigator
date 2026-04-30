@@ -49,3 +49,7 @@ ADR that supersedes it and note the supersession in both files.
 ## Phase 4 ADRs
 
 - [ADR-018: Phase 4 tooling choices — Ruff, mypy, pytest-cov, factory-boy, GitHub Actions, Makefile](./ADR-018-tooling-choices.md)
+
+## Phase 5 ADRs
+
+- [ADR-019: Phase 5 deploy architecture — Docker, GHCR, Render](./ADR-019-deploy-architecture.md)
