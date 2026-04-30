@@ -8,3 +8,8 @@ hypothesis
 flask>=3.0,<4
 pydantic>=2.6,<3
 gunicorn>=21.2,<23
+
+# Phase 2 — Persistence
+sqlalchemy>=2.0,<3
+alembic>=1.13,<2
+psycopg[binary]>=3.1,<4

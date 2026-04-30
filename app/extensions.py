@@ -1,14 +1,23 @@
 """Process-wide singletons attached to a Flask app.
 
-``init_extensions(app)`` loads the three JSON data files once at
-startup (jobs, skill taxonomy, learning resources), instantiates the
-four repositories, and picks the categorizer via
-:func:`app.core.ai_engine.get_categorizer`. The result is stashed on
-``app.extensions["skillbridge"]`` so blueprints can reach it through
-:func:`get_ext` without global state.
+Phase 1 shipped a memory-only :class:`Extensions`. Phase 2 extends it
+with dual-backend selection: at ``init_extensions`` time we pick
+between the in-memory repositories and a SQLAlchemy engine + session
+factory + SQL repositories based on config.
 
-Design reference: `.kiro/specs/phase-1-rest-api/design.md` §Extensions.
-Requirement reference: R10.1, R10.2, R10.3, R10.4.
+Backend precedence (see :func:`pick_backend`):
+
+1. An explicit ``REPO_BACKEND`` wins (useful in tests and benchmarks).
+2. An empty ``DATABASE_URL`` means "memory".
+3. ``sqlite:`` or ``postgresql:`` URLs pick the corresponding SQL
+   dialect.
+4. Any other scheme raises :class:`RuntimeError` so a misconfigured
+   prod boot fails loudly at startup instead of producing mysterious
+   runtime errors.
+
+Design reference: `.kiro/specs/phase-2-persistence/design.md` §Extensions.
+Requirement reference: R3.1, R3.2, R3.3, R3.4, R4.6, R10.1, R10.2,
+R10.3, R10.4.
 """
 
 from __future__ import annotations
@@ -18,20 +27,97 @@ import os
 from dataclasses import dataclass, field
 
 from flask import Flask, current_app
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.ai_engine import FallbackCategorizer, SkillCategorizerInterface, get_categorizer
 from app.core.job_catalog import load_jobs
 from app.core.models import LearningResource
 from app.core.resume_parser import load_taxonomy
 from app.core.roadmap_generator import _load_resources
+from app.db.engine import build_engine
+from app.db.session import set_session_factory
 from app.repositories.analysis_repo import InMemoryAnalysisRepository
+from app.repositories.base import (
+    AnalysisRepository,
+    JobRepository,
+    ProfileRepository,
+    RoadmapRepository,
+)
 from app.repositories.job_repo import InMemoryJobRepository
 from app.repositories.profile_repo import InMemoryProfileRepository
 from app.repositories.roadmap_repo import InMemoryRoadmapRepository
+from app.repositories.sql_analysis_repo import SqlAlchemyAnalysisRepository
+from app.repositories.sql_job_repo import SqlAlchemyJobRepository
+from app.repositories.sql_profile_repo import SqlAlchemyProfileRepository
+from app.repositories.sql_roadmap_repo import SqlAlchemyRoadmapRepository
 
 logger = logging.getLogger(__name__)
 
 _EXT_KEY = "skillbridge"
+
+
+# ---------------------------------------------------------------------------
+# Backend selection
+# ---------------------------------------------------------------------------
+
+
+def _config_value(config, key: str) -> str:
+    """Read a config value supporting both Flask ``app.config`` (dict)
+    and config classes with class-level attributes (unit tests).
+    """
+    if hasattr(config, "get") and not isinstance(config, type):
+        value = config.get(key, "")
+    else:
+        value = getattr(config, key, "")
+    return str(value or "").strip()
+
+
+def pick_backend(config) -> str:
+    """Pick the repository backend for *config*.
+
+    Returns one of ``"memory"``, ``"sqlite"``, or ``"postgres"``.
+
+    Args:
+        config: Either a Flask ``app.config`` (dict-backed) or a
+            config class / instance exposing ``REPO_BACKEND`` and
+            ``DATABASE_URL`` as attributes. Supports both so the
+            helper can be called from ``init_extensions`` (dict) and
+            from unit tests (class).
+
+    Raises:
+        RuntimeError: When ``DATABASE_URL`` uses a scheme other than
+            ``sqlite:`` or ``postgresql:`` (and ``REPO_BACKEND`` isn't
+            set to override).
+    """
+    explicit = _config_value(config, "REPO_BACKEND")
+    if explicit:
+        if explicit not in {"memory", "sqlite", "postgres"}:
+            raise RuntimeError(
+                f"Unsupported REPO_BACKEND {explicit!r}; "
+                f"expected one of 'memory', 'sqlite', 'postgres'"
+            )
+        return explicit
+
+    url = _config_value(config, "DATABASE_URL")
+    if not url:
+        return "memory"
+
+    scheme = url.split(":", 1)[0].split("+", 1)[0]
+    if scheme == "sqlite":
+        return "sqlite"
+    if scheme == "postgresql":
+        return "postgres"
+
+    raise RuntimeError(
+        f"Unsupported DATABASE_URL scheme {scheme!r}; "
+        f"expected one of 'sqlite:', 'postgresql:' (or set REPO_BACKEND)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Extensions container
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -40,34 +126,50 @@ class Extensions:
 
     Each :func:`app.create_app` call produces its own :class:`Extensions`
     instance, so test apps stay isolated from each other (R10.2).
+
+    Repository fields are typed as the Phase 1 :mod:`app.repositories.base`
+    Protocols so that either the ``InMemory*`` or ``SqlAlchemy*``
+    families structurally fit (R2.1, R2.2).
     """
 
-    profile_repo: InMemoryProfileRepository
-    job_repo: InMemoryJobRepository
-    analysis_repo: InMemoryAnalysisRepository
-    roadmap_repo: InMemoryRoadmapRepository
+    profile_repo: ProfileRepository
+    job_repo: JobRepository
+    analysis_repo: AnalysisRepository
+    roadmap_repo: RoadmapRepository
     taxonomy: list[str]
     resources: list[LearningResource]
     categorizer: SkillCategorizerInterface
-    # Keep lists of names loaded, useful for diagnostics without reading
-    # files again.
+
+    # Phase 2: SQL backend handles. Both are ``None`` on memory-backed
+    # apps; handlers never touch them directly.
+    engine: Engine | None = None
+    session_factory: sessionmaker[Session] | None = None
+
+    # Diagnostic breadcrumbs — what paths/URLs were used at init.
+    # `_database_url` is kept for introspection in tests only; it must
+    # not leak into responses, logs, or error bodies (R10.1).
     _jobs_path: str = field(default="")
     _taxonomy_path: str = field(default="")
     _resources_path: str = field(default="")
+    _backend: str = field(default="memory")
+    _database_url: str = field(default="", repr=False)
+
+
+# ---------------------------------------------------------------------------
+# Categorizer selection (unchanged from Phase 1)
+# ---------------------------------------------------------------------------
 
 
 def _select_categorizer(app: Flask) -> SkillCategorizerInterface:
     """Pick the categorizer, respecting TestConfig's forced fallback.
 
     TestConfig sets ``GROQ_API_KEY = ""``; the factory must honour that
-    even if the process env has a real key (R10.3). We temporarily clear
-    the env var around :func:`get_categorizer` to avoid any fallback to
-    environment-based lookup inside ai_engine.
+    even if the process env has a real key (Phase 1 R10.3). We
+    temporarily clear the env var around :func:`get_categorizer` to
+    avoid any fallback to environment-based lookup inside ai_engine.
     """
     configured_key = str(app.config.get("GROQ_API_KEY", "") or "")
     if not configured_key:
-        # Force fallback for deterministic tests. Save/restore the env var
-        # so we don't mutate global state across apps.
         saved = os.environ.pop("GROQ_API_KEY", None)
         try:
             return FallbackCategorizer()
@@ -75,13 +177,16 @@ def _select_categorizer(app: Flask) -> SkillCategorizerInterface:
             if saved is not None:
                 os.environ["GROQ_API_KEY"] = saved
 
-    # Non-test configs: honour whatever ai_engine's factory decides
-    # (GroqCategorizer if the key works, else its own FallbackCategorizer).
     return get_categorizer()
 
 
-def init_extensions(app: Flask) -> None:
-    """Load data, instantiate repos + categorizer, store on the app."""
+# ---------------------------------------------------------------------------
+# Per-backend builders
+# ---------------------------------------------------------------------------
+
+
+def _build_memory_extensions(app: Flask) -> Extensions:
+    """Phase 1 flow: in-memory repositories over JSON data."""
     jobs_path = app.config["JOBS_PATH"]
     taxonomy_path = app.config["TAXONOMY_PATH"]
     resources_path = app.config["RESOURCES_PATH"]
@@ -90,7 +195,7 @@ def init_extensions(app: Flask) -> None:
     taxonomy = load_taxonomy(taxonomy_path)
     resources = _load_resources(resources_path)
 
-    ext = Extensions(
+    return Extensions(
         profile_repo=InMemoryProfileRepository(),
         job_repo=InMemoryJobRepository(jobs),
         analysis_repo=InMemoryAnalysisRepository(),
@@ -98,19 +203,87 @@ def init_extensions(app: Flask) -> None:
         taxonomy=taxonomy,
         resources=resources,
         categorizer=_select_categorizer(app),
+        engine=None,
+        session_factory=None,
         _jobs_path=jobs_path,
         _taxonomy_path=taxonomy_path,
         _resources_path=resources_path,
+        _backend="memory",
+        _database_url="",
     )
+
+
+def _build_sql_extensions(app: Flask, backend: str) -> Extensions:
+    """Build a SQL-backed Extensions bundle.
+
+    Wires the engine, sessionmaker, and the four
+    :class:`SqlAlchemy*Repository` classes — plus reuses the memory
+    backend's taxonomy/resources/categorizer path because those stay
+    as startup-loaded JSON regardless of backend (R9.2, R9.3).
+    """
+    database_url = str(app.config.get("DATABASE_URL", "") or "")
+    echo = bool(app.config.get("SQLALCHEMY_ECHO", False))
+
+    engine = build_engine(database_url, echo=echo)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    # Catalog data stays on disk even under the SQL backend.
+    taxonomy_path = app.config["TAXONOMY_PATH"]
+    resources_path = app.config["RESOURCES_PATH"]
+    taxonomy = load_taxonomy(taxonomy_path)
+    resources = _load_resources(resources_path)
+
+    return Extensions(
+        profile_repo=SqlAlchemyProfileRepository(),
+        job_repo=SqlAlchemyJobRepository(),
+        analysis_repo=SqlAlchemyAnalysisRepository(),
+        roadmap_repo=SqlAlchemyRoadmapRepository(),
+        taxonomy=taxonomy,
+        resources=resources,
+        categorizer=_select_categorizer(app),
+        engine=engine,
+        session_factory=session_factory,
+        _jobs_path=str(app.config.get("JOBS_PATH", "")),
+        _taxonomy_path=taxonomy_path,
+        _resources_path=resources_path,
+        _backend=backend,
+        _database_url=database_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+
+def init_extensions(app: Flask) -> None:
+    """Build the per-app :class:`Extensions` bundle and stash it.
+
+    Dispatches to the memory or SQL builder based on
+    :func:`pick_backend`. The result is stored on
+    ``app.extensions["skillbridge"]``.
+    """
+    backend = pick_backend(app.config)
+
+    if backend == "memory":
+        ext = _build_memory_extensions(app)
+    else:
+        ext = _build_sql_extensions(app, backend)
+
+    # Install (or clear) the module-level sessionmaker in db.session so
+    # repository code can reach for it later. Clearing on memory-backed
+    # apps protects any misconfigured SQL repo from silently using a
+    # leftover factory from an earlier test app.
+    set_session_factory(ext.session_factory)
 
     app.extensions[_EXT_KEY] = ext
 
     logger.info(
         "extensions.ready",
         extra={"extra_fields": {
-            "jobs": len(jobs),
-            "taxonomy": len(taxonomy),
-            "resources": len(resources),
+            "backend": ext._backend,
+            "taxonomy": len(ext.taxonomy),
+            "resources": len(ext.resources),
             "categorizer": type(ext.categorizer).__name__,
         }},
     )

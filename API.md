@@ -1,10 +1,37 @@
-# SkillBridge REST API — Phase 1 Reference
+# SkillBridge REST API — Phase 1 & 2 Reference
 
 Base URL (local dev): `http://localhost:5000`
 
 All resource endpoints live under `/api/v1/`. `/health` is
 intentionally unversioned so load balancers and monitoring tools can
 probe the service without caring about API versions.
+
+## Persistence (Phase 2)
+
+The API now reads/writes a relational database when a `DATABASE_URL`
+is configured. Endpoint contracts are **identical** to Phase 1 —
+same paths, status codes, error envelopes, correlation-id behavior —
+but data now survives process restarts.
+
+```bash
+# First-time setup (dev SQLite):
+APP_ENV=dev alembic upgrade head
+python -m scripts.seed_db
+
+# Or omit DATABASE_URL entirely to run on the Phase 1 in-memory
+# backend (data vanishes on restart, single-worker only):
+REPO_BACKEND=memory python run.py
+```
+
+Production uses Postgres: set `DATABASE_URL=postgresql://...` and
+`gunicorn -w N` is now safe (per-worker in-memory state is no longer
+an issue on the SQL backend).
+
+See [`decisions/ADR-007`](decisions/ADR-007-dual-backend-repositories.md)
+for the dual-backend design,
+[`ADR-008`](decisions/ADR-008-alembic-workflow.md) for the migration
+workflow, and [`ADR-011`](decisions/ADR-011-catalog-vs-db-boundary.md)
+for why only jobs moved to the DB.
 
 ## Conventions
 
