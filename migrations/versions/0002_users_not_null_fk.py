@@ -212,16 +212,25 @@ def upgrade() -> None:
     """Purge orphan rows, then flip nullability + FK cascade.
 
     SQLite's batch_alter_table rewrites the table, which drops the
-    pre-existing ``ix_profiles_user_id`` index in the process. We
-    recreate it after each batch so the post-migration schema
-    matches the 0001 index set plus the new nullability/FK shape.
+    pre-existing indexes in the process. We recreate them after each
+    batch so the post-migration schema matches the 0001 index set
+    plus the new nullability/FK shape.
+
+    Postgres's batch_alter_table is a no-op wrapper around plain
+    ``ALTER TABLE`` — it does NOT rewrite the table and the 0001
+    indexes stay in place. So the index recreates would collide with
+    DuplicateTable. We check the dialect and skip the recreates on
+    Postgres.
     """
 
     # 1. Data step.
     op.execute("DELETE FROM analyses WHERE user_id IS NULL")
     op.execute("DELETE FROM profiles WHERE user_id IS NULL")
 
-    # 2. profiles: rewrite, then recreate the dropped index.
+    bind = op.get_bind()
+    is_sqlite = bind.dialect.name == "sqlite"
+
+    # 2. profiles: rewrite, then (on SQLite only) recreate the dropped index.
     target_metadata = sa.MetaData()
     with op.batch_alter_table(
         "profiles", copy_from=_build_profiles_target(target_metadata)
@@ -231,9 +240,10 @@ def upgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=False,
         )
-    op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
+    if is_sqlite:
+        op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
 
-    # 3. analyses: rewrite, then recreate the two dropped indexes.
+    # 3. analyses: rewrite, then (on SQLite only) recreate the two dropped indexes.
     target_metadata = sa.MetaData()
     with op.batch_alter_table(
         "analyses", copy_from=_build_analyses_target(target_metadata)
@@ -243,17 +253,27 @@ def upgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=False,
         )
-    op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
-    op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
+    if is_sqlite:
+        op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
+        op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
 
 
 def downgrade() -> None:
-    """Reverse schema changes only. Deleted rows are NOT restored."""
+    """Reverse schema changes only. Deleted rows are NOT restored.
+
+    Same dialect gating as upgrade: on Postgres the batch is a
+    no-op ALTER and the indexes stay put, so the drop+recreate
+    dance is SQLite-only.
+    """
+
+    bind = op.get_bind()
+    is_sqlite = bind.dialect.name == "sqlite"
 
     # Drop the Phase 3 indexes before the batch rewrite so they don't
-    # collide with the recreations below.
-    op.drop_index("ix_analyses_job_id", table_name="analyses")
-    op.drop_index("ix_analyses_profile_id", table_name="analyses")
+    # collide with the recreations below (SQLite only).
+    if is_sqlite:
+        op.drop_index("ix_analyses_job_id", table_name="analyses")
+        op.drop_index("ix_analyses_profile_id", table_name="analyses")
 
     original_metadata = sa.MetaData()
     with op.batch_alter_table(
@@ -264,10 +284,11 @@ def downgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=True,
         )
-    op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
-    op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
+    if is_sqlite:
+        op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
+        op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
 
-    op.drop_index("ix_profiles_user_id", table_name="profiles")
+        op.drop_index("ix_profiles_user_id", table_name="profiles")
 
     original_metadata = sa.MetaData()
     with op.batch_alter_table(
@@ -278,4 +299,5 @@ def downgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=True,
         )
-    op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
+    if is_sqlite:
+        op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
