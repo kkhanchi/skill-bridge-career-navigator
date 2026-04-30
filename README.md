@@ -1,5 +1,11 @@
 # Skill-Bridge Career Navigator
 
+[![CI](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml/badge.svg)](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
+
 🎥 **[Watch the Video Presentation](https://drive.google.com/file/d/1fNGElHl7o5CnxIvw-AoDvFN7fmro8Gxe/view?usp=drive_link)**
 
 🚀 **[Try the Live App](https://skill-bridge-career-navigator-kaczqrtu9jxfbxlywg9miu.streamlit.app/)**
@@ -94,7 +100,7 @@ pytest tests/ -v
 
 ---
 
-## Phase 3 — Authentication & Authorization (current)
+## Phase 3 — Authentication & Authorization
 
 Phase 3 turns SkillBridge into a multi-user system. Every profile, analysis, and roadmap is now owned by exactly one user; cross-tenant reads and writes return 404 (ADR-015 anti-enumeration). Authentication is JWT-based with short-lived stateless access tokens and stateful rotating refresh tokens.
 
@@ -133,6 +139,41 @@ The rate limiter uses in-memory storage for Phase 3 (ADR-016). A deployment with
 A request from user B against a resource owned by user A returns `404 NOT_FOUND` — same envelope body as a genuinely-missing resource. The ownership filter is baked into every `*_for_user` query so wrong-owner is indistinguishable from doesn't-exist (ADR-015). Register, by contrast, still leaks email existence via `409 EMAIL_TAKEN` — accepted Phase 3 tradeoff, documented in ADR-015.
 
 See `.kiro/specs/phase-3-auth/` for full design and requirements, and ADRs [012](decisions/ADR-012-argon2-password-hashing.md), [013](decisions/ADR-013-jwt-hs256-rotating-refresh.md), [014](decisions/ADR-014-additive-protocol-extension.md), [015](decisions/ADR-015-404-over-403.md), [016](decisions/ADR-016-flask-limiter-in-memory.md), [017](decisions/ADR-017-cors-env-allowlist.md) for the non-trivial choices.
+
+---
+
+## Phase 4 — Testing & Quality (current)
+
+Phase 4 formalizes the development loop around Phases 1-3's code. Zero runtime behaviour change — what's new is enforcement, measurement, and tooling.
+
+**What shipped in Phase 4:**
+- **Ruff** for lint + format (consolidates Black + isort + flake8). 100-char line length, `E`/`W`/`F`/`I`/`B`/`UP`/`SIM` rule families, curated ignores documented in `pyproject.toml`.
+- **mypy** with `strict = true` globally across `app/`. Per-module escape hatches for the Streamlit shim modules at the repo root and `app.core.ai_engine` (Groq SDK has no stubs). The Flask view-handler modules relax `no-untyped-def` because handler chains through `@require_auth + @_with_limit + @validate_body + @bp.post` don't propagate types cleanly under strict mode.
+- **pytest-cov** with branch coverage and an 80% floor enforced on every run. Current state: 91% total coverage; no file below 66%.
+- **factory-boy + Faker** for six ORM factories covering every Phase 2/3 table (`UserFactory`, `JobFactory`, `ProfileFactory`, `AnalysisFactory`, `RoadmapFactory`, `RefreshTokenFactory`). `SubFactory` auto-creates FK parents; `Sequence` prevents email collisions. 6 round-trip tests plus one real-integration refactor in `test_sql_persistence.py` prove the factories slot into both the detached and HTTP test paths.
+- **pre-commit hooks** running Ruff lint, Ruff format, trailing whitespace, end-of-file fixer, and YAML check on every `git commit`. No pytest hook — test runtime is too long for commit-time.
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) running the full gate on every push and every PR to `main`. Pip cache keyed on `requirements.txt`; `coverage.xml` uploaded as a workflow artifact.
+- **Makefile** with `install`, `hooks`, `lint`, `format`, `format-check`, `typecheck`, `test`, `check`, `clean`. `make check` mirrors CI exactly.
+- **Single consolidated ADR** (012-018? actually ADR-018) documenting the tool choices as one coherent decision.
+
+Test count: **274** (Phase 3's 268 plus 6 factory round-trips). All property tests from Phases 1–3 continue to run on every CI build.
+
+### Quality & CI
+
+One command runs the full gate locally:
+
+```bash
+cd skill-bridge
+make check     # ruff + ruff-format-check + mypy + pytest (with coverage)
+```
+
+Or install the pre-commit hooks so every `git commit` catches the fast subset automatically:
+
+```bash
+make hooks     # or: pre-commit install
+```
+
+CI workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml). See [ADR-018](decisions/ADR-018-tooling-choices.md) for the tooling decision record.
 
 ---
 

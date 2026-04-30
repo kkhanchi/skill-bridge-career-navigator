@@ -45,3 +45,7 @@ ADR that supersedes it and note the supersession in both files.
 - [ADR-015: Return 404 for cross-tenant access, accept 409 register leak](./ADR-015-404-over-403.md)
 - [ADR-016: flask-limiter with in-memory storage (single-worker caveat)](./ADR-016-flask-limiter-in-memory.md)
 - [ADR-017: CORS allowlist via env var, prod requires explicit origins](./ADR-017-cors-env-allowlist.md)
+
+## Phase 4 ADRs
+
+- [ADR-018: Phase 4 tooling choices — Ruff, mypy, pytest-cov, factory-boy, GitHub Actions, Makefile](./ADR-018-tooling-choices.md)
