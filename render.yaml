@@ -31,10 +31,12 @@ services:
     # unauthenticated liveness endpoint shipped in Phase 1. The
     # probe deliberately does NOT check the DB (ADR-019 §6).
     healthCheckPath: /health
-    # preDeployCommand runs BEFORE the new container starts serving
-    # traffic. Failed migrations abort the deploy and the old
-    # container keeps serving — fail-closed semantics.
-    preDeployCommand: "alembic upgrade head"
+    # NOTE: Render's free tier does not support preDeployCommand.
+    # Migrations run instead in entrypoint.sh (`alembic upgrade head`
+    # before `exec gunicorn`) — same effect, different trigger
+    # point. Upgrading to Starter ($7/mo) would allow moving back
+    # to a pre-deploy step with fail-closed semantics. See ADR-019
+    # §5 for context.
     envVars:
       - key: APP_ENV
         value: prod
