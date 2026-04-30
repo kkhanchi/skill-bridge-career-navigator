@@ -1,39 +1,34 @@
 #!/usr/bin/env sh
 # Container entrypoint.
 #
-# Responsibilities (in order):
-#   1. Auto-stamp recovery: if the target DB already has our tables
-#      but alembic's bookkeeping table is empty or missing, stamp
-#      head without running any migrations. This handles the
-#      specific failure mode where an earlier deploy crashed
-#      mid-migration (e.g. psycopg driver missing) after CREATE
-#      TABLE but before Alembic wrote its version row. Without
-#      this, every subsequent boot dies on "relation already exists".
-#   2. Run pending Alembic migrations against $DATABASE_URL.
-#      Idempotent — no-op on an already-up-to-date schema.
-#   3. exec gunicorn so it becomes PID 1 and receives SIGTERM
-#      directly from the orchestrator (Render / compose / k8s).
-#      Without `exec`, SIGTERM hits this shell and gunicorn
-#      never drains in-flight requests.
+# Responsibilities:
+#   1. Run alembic upgrade head against $DATABASE_URL.
+#      If the upgrade fails AND the failure is our known stuck
+#      state (schema already present), stamp head and move on.
+#   2. exec gunicorn so it receives SIGTERM directly.
 #
-# Migration failures abort startup with a non-zero exit code; the
-# old container keeps serving until a successful deploy replaces
-# it (fail-closed on migration errors).
-#
-# POSIX sh (not bash) so the script works if we ever swap the
-# runtime base image to an alpine variant.
+# POSIX sh so this works on any base image.
 
 set -e
 
-echo "[entrypoint] Checking for stuck migration state..."
-python <<'PY'
-"""Detect + recover from a half-applied migration.
+echo "[entrypoint v2] === container starting ==="
+echo "[entrypoint v2] APP_ENV=${APP_ENV:-unset} PORT=${PORT:-unset}"
 
-Condition: the users table exists (schema was already created by a
-previous run) AND alembic_version is empty or missing (bookkeeping
-was never written). In that case, stamp head so subsequent
-alembic upgrade is a no-op.
-"""
+# Run the upgrade. If it fails, check whether the DB is in the
+# known stuck state (schema tables present). If so, stamp head
+# and retry the upgrade (which will now be a no-op and exit
+# cleanly). If not, propagate the failure.
+set +e
+echo "[entrypoint v2] Running: alembic upgrade head"
+alembic upgrade head
+upgrade_rc=$?
+set -e
+
+if [ "$upgrade_rc" != "0" ]; then
+    echo "[entrypoint v2] alembic upgrade exited $upgrade_rc — checking for stuck state"
+    python - <<'PY'
+"""Probe the DB. If our schema exists, stamp head and exit 0 so the
+shell retries the upgrade. Otherwise exit 1 so the shell aborts."""
 
 from __future__ import annotations
 
@@ -48,41 +43,29 @@ from app.db.engine import build_engine
 app_env = os.environ.get("APP_ENV", "dev").strip() or "dev"
 db_url = CONFIG_MAP[app_env].DATABASE_URL
 engine = build_engine(db_url)
-
 with engine.connect() as conn:
-    insp = inspect(conn)
-    tables = set(insp.get_table_names())
-    has_schema = "users" in tables
+    tables = set(inspect(conn).get_table_names())
 
-# If our schema tables already exist, the DB is post-migration.
-# Force-stamp head regardless of whether alembic_version exists or
-# what it contains. This handles:
-#   - Tables created by a crashed prior run with no version row
-#   - Tables created but alembic_version contains a stale/partial
-#     revision (previous bug — DuplicateTable on retry)
-#   - A fresh copy of the DB restored from backup without alembic
-#     state
-# On a truly clean DB (no users table), fall through and let
-# alembic upgrade head create everything.
-if has_schema:
-    print("[entrypoint] Schema already present — stamping head", flush=True)
-    sys.exit(42)
-else:
-    print("[entrypoint] Clean DB — running migrations normally", flush=True)
+if "users" in tables:
+    print("[entrypoint v2] DB has schema; will stamp head", flush=True)
     sys.exit(0)
+else:
+    print("[entrypoint v2] DB has no schema; upgrade failed for another reason", flush=True)
+    sys.exit(1)
 PY
-rc=$?
-if [ "$rc" = "42" ]; then
-    alembic stamp head
-elif [ "$rc" != "0" ]; then
-    echo "[entrypoint] Recovery probe failed (exit $rc); aborting" >&2
-    exit "$rc"
+    probe_rc=$?
+    if [ "$probe_rc" = "0" ]; then
+        echo "[entrypoint v2] Stamping alembic to head"
+        alembic stamp head
+        echo "[entrypoint v2] Re-running alembic upgrade head (no-op expected)"
+        alembic upgrade head
+    else
+        echo "[entrypoint v2] Fatal: alembic failed and DB is not in stuck state"
+        exit "$upgrade_rc"
+    fi
 fi
 
-echo "[entrypoint] Running alembic upgrade head..."
-alembic upgrade head
-
-echo "[entrypoint] Starting gunicorn on port ${PORT:-5000}..."
+echo "[entrypoint v2] Starting gunicorn on 0.0.0.0:${PORT:-5000}"
 exec gunicorn \
     --bind "0.0.0.0:${PORT:-5000}" \
     --workers 1 \
