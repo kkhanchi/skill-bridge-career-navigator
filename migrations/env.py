@@ -65,9 +65,7 @@ def _resolve_database_url() -> str:
 
     app_env = os.environ.get("APP_ENV", "dev").strip() or "dev"
     if app_env not in CONFIG_MAP:
-        raise RuntimeError(
-            f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}"
-        )
+        raise RuntimeError(f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}")
     cfg = CONFIG_MAP[app_env]
     url = str(getattr(cfg, "DATABASE_URL", "") or "").strip()
     if not url:

@@ -1,29 +1,31 @@
 """Skill-Bridge Career Navigator — Streamlit Application."""
 
-import sys
 import os
+import sys
+
 import streamlit as st
 
 # Ensure the skill-bridge directory is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models import UserProfile, Roadmap
-from profile_manager import create_profile, update_profile, save_profile, load_profile
-from resume_parser import load_taxonomy, parse_resume
-from profile_printer import format_profile
-from job_catalog import load_jobs, search_jobs
-from gap_analyzer import analyze_gap
 from ai_engine import get_categorizer
-from roadmap_generator import generate_roadmap, mark_completed, recalculate_match, _load_resources
+from gap_analyzer import analyze_gap
+from job_catalog import load_jobs, search_jobs
+from profile_manager import create_profile, load_profile, save_profile, update_profile
+from profile_printer import format_profile
+from resume_parser import load_taxonomy, parse_resume
+from roadmap_generator import _load_resources, generate_roadmap, mark_completed, recalculate_match
 
 st.set_page_config(page_title="Skill-Bridge Career Navigator", page_icon="🎯", layout="wide")
 st.title("🎯 Skill-Bridge Career Navigator")
 st.caption("Bridge the gap between your skills and your dream role")
 
+
 # --- Load static data ---
 @st.cache_data
 def cached_taxonomy():
     return load_taxonomy(os.path.join(os.path.dirname(__file__), "data", "skill_taxonomy.json"))
+
 
 @st.cache_data
 def cached_jobs():
@@ -32,9 +34,13 @@ def cached_jobs():
     except FileNotFoundError:
         return None
 
+
 @st.cache_data
 def cached_resources():
-    return _load_resources(os.path.join(os.path.dirname(__file__), "data", "learning_resources.json"))
+    return _load_resources(
+        os.path.join(os.path.dirname(__file__), "data", "learning_resources.json")
+    )
+
 
 taxonomy = cached_taxonomy()
 all_jobs = cached_jobs()
@@ -66,8 +72,12 @@ with st.form("profile_form"):
         name = st.text_input("Name", value=st.session_state.get("profile_name", ""))
         experience = st.number_input("Years of Experience", min_value=0, max_value=50, value=0)
     with col2:
-        education = st.selectbox("Education Level", ["High School", "Associate", "Bachelor's", "Master's", "PhD"])
-        target_role = st.text_input("Target Job Role", value=st.session_state.get("profile_target", ""))
+        education = st.selectbox(
+            "Education Level", ["High School", "Associate", "Bachelor's", "Master's", "PhD"]
+        )
+        target_role = st.text_input(
+            "Target Job Role", value=st.session_state.get("profile_target", "")
+        )
 
     # Skills input
     default_skills = st.session_state.get("extracted_skills", [])
@@ -75,13 +85,15 @@ with st.form("profile_form"):
         "Your Skills",
         options=taxonomy,
         default=[s for s in default_skills if s in taxonomy],
-        help="Select from taxonomy or type to search"
+        help="Select from taxonomy or type to search",
     )
 
     submitted = st.form_submit_button("Create / Update Profile")
     if submitted:
         try:
-            profile, notification = create_profile(name, skills_input, experience, education, target_role)
+            profile, notification = create_profile(
+                name, skills_input, experience, education, target_role
+            )
             save_profile(profile)
             st.session_state["profile_name"] = name
             st.session_state["profile_target"] = target_role
@@ -121,8 +133,9 @@ if profile and all_jobs is not None:
 
     if filtered_jobs:
         job_titles = [f"{j.title} ({j.experience_level})" for j in filtered_jobs]
-        selected_idx = st.selectbox("Select a job to analyze", range(len(job_titles)),
-                                     format_func=lambda i: job_titles[i])
+        selected_idx = st.selectbox(
+            "Select a job to analyze", range(len(job_titles)), format_func=lambda i: job_titles[i]
+        )
         selected_job = filtered_jobs[selected_idx]
 
         with st.expander("📋 Job Details", expanded=False):
@@ -139,8 +152,10 @@ if profile and all_jobs is not None:
 
             # AI categorization
             categorizer = get_categorizer()
-            cat_result = categorizer.categorize(gap.missing_required + gap.missing_preferred,
-                                                 gap.matched_required + gap.matched_preferred)
+            cat_result = categorizer.categorize(
+                gap.missing_required + gap.missing_preferred,
+                gap.matched_required + gap.matched_preferred,
+            )
             st.session_state["categorization"] = cat_result
 
     # Display gap results
@@ -222,19 +237,28 @@ if "gap_result" in st.session_state and profile:
             current_match = recalculate_match(profile, selected_job, roadmap)
             prev_match = st.session_state.get("prev_match", current_match)
             if current_match != prev_match:
-                st.metric("Updated Match", f"{current_match}%", delta=f"+{current_match - prev_match}%")
+                st.metric(
+                    "Updated Match", f"{current_match}%", delta=f"+{current_match - prev_match}%"
+                )
 
     # Profile Update Section
     st.header("🔄 Update Your Profile")
     with st.form("update_form"):
-        new_skills = st.multiselect("Add Skills", options=[s for s in taxonomy if s not in profile.skills],
-                                     key="add_skills_select")
-        remove_skills = st.multiselect("Remove Skills", options=profile.skills, key="remove_skills_select")
+        new_skills = st.multiselect(
+            "Add Skills",
+            options=[s for s in taxonomy if s not in profile.skills],
+            key="add_skills_select",
+        )
+        remove_skills = st.multiselect(
+            "Remove Skills", options=profile.skills, key="remove_skills_select"
+        )
         update_submitted = st.form_submit_button("Update & Re-Analyze")
 
         if update_submitted and (new_skills or remove_skills):
             try:
-                updated = update_profile(profile, added_skills=new_skills, removed_skills=remove_skills)
+                updated = update_profile(
+                    profile, added_skills=new_skills, removed_skills=remove_skills
+                )
                 save_profile(updated)
                 # Re-run gap analysis
                 if selected_job:
@@ -246,11 +270,13 @@ if "gap_result" in st.session_state and profile:
                     categorizer = get_categorizer()
                     cat_result = categorizer.categorize(
                         new_gap.missing_required + new_gap.missing_preferred,
-                        new_gap.matched_required + new_gap.matched_preferred
+                        new_gap.matched_required + new_gap.matched_preferred,
                     )
                     st.session_state["categorization"] = cat_result
 
-                    st.success(f"Profile updated! Match: {old_match}% → {new_gap.match_percentage}%")
+                    st.success(
+                        f"Profile updated! Match: {old_match}% → {new_gap.match_percentage}%"
+                    )
                 else:
                     st.success("Profile updated!")
                 st.rerun()

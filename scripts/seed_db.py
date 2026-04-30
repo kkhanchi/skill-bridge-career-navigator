@@ -41,9 +41,7 @@ def _resolve_engine() -> Engine:
     """Build an engine from the config selected by APP_ENV."""
     app_env = os.environ.get("APP_ENV", "dev").strip() or "dev"
     if app_env not in CONFIG_MAP:
-        raise RuntimeError(
-            f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}"
-        )
+        raise RuntimeError(f"Unknown APP_ENV {app_env!r}; expected one of {sorted(CONFIG_MAP)}")
     config = CONFIG_MAP[app_env]
     url = str(getattr(config, "DATABASE_URL", "") or "").strip()
     if not url:

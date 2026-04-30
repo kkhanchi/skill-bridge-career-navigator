@@ -47,17 +47,16 @@ On Postgres the same code emits plain ``ALTER`` statements.
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "0002_users_not_null_fk"
-down_revision: Union[str, Sequence[str], None] = "0001_initial_schema"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "0001_initial_schema"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # Named FK constraints to attach in this migration's target shape.
@@ -244,9 +243,7 @@ def upgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=False,
         )
-    op.create_index(
-        "ix_analyses_profile_id", "analyses", ["profile_id"], unique=False
-    )
+    op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
     op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
 
 
@@ -267,9 +264,7 @@ def downgrade() -> None:
             existing_type=sa.String(length=32),
             nullable=True,
         )
-    op.create_index(
-        "ix_analyses_profile_id", "analyses", ["profile_id"], unique=False
-    )
+    op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
     op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
 
     op.drop_index("ix_profiles_user_id", table_name="profiles")
@@ -284,4 +279,3 @@ def downgrade() -> None:
             nullable=True,
         )
     op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
-

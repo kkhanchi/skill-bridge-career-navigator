@@ -1,0 +1,35 @@
+# SkillBridge pre-commit hooks.
+#
+# Install: `pip install pre-commit && pre-commit install` (or
+# `make hooks` from the repo root). Hooks run on every `git commit`
+# and reject commits with style or whitespace problems.
+#
+# No pytest hook — the test suite runs in ~6s but that's still too
+# long for commit-time friction. Tests run in CI instead. See
+# .github/workflows/ci.yml.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Pinned to a specific tag so upstream rule changes don't silently
+    # break our pipeline. Bump deliberately. Matches the ruff version
+    # pinned in requirements.txt (0.15.x) so hook + CLI agree on
+    # formatter output.
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        # Apply auto-fixes so `git commit` produces a clean diff
+        # instead of rejecting the commit for a fixable issue.
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      # Strip trailing whitespace from text files.
+      - id: trailing-whitespace
+      # Ensure files end with exactly one newline.
+      - id: end-of-file-fixer
+      # Parse YAML files — catches syntax errors in workflows and configs.
+      - id: check-yaml
+      # Reject accidental megabyte-scale commits (e.g. a pasted SQL dump).
+      - id: check-added-large-files
