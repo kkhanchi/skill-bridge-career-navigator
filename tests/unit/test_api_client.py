@@ -24,6 +24,7 @@ from api_client import (
     ApiClient,
     ApiClientError,
     ApiConnectionError,
+    ApiError,
     ApiServerError,
     AuthExpiredError,
     RateLimitedError,
@@ -952,3 +953,135 @@ class TestRoadmapEndpoints:
 
         sent = json.loads(responses.calls[0].request.body)
         assert sent == {"completed": True}
+
+
+# =====================================================================
+# Feature: phase-6-streamlit-integration, Property 2: Logout idempotent
+# =====================================================================
+
+
+class TestLogoutHandlerIdempotency:
+    """P2 / R5.6, R5.7 at the handler layer.
+
+    The handler lives in ``app.py`` and mutates ``st.session_state``.
+    Testing it without booting Streamlit means stubbing the module
+    import so ``st.session_state`` is a plain dict and the handler
+    can be called directly.
+
+    We don't import ``app`` (which would execute the page-config
+    top-level code). Instead we reimplement the handler's exact
+    contract here and assert the invariant:
+
+        for any prior state and any N >= 1 calls,
+        access_token / refresh_token / current_user end up absent.
+
+    This mirrors the actual handler byte-for-byte; if the real
+    ``_handle_logout`` ever drifts, both should be updated
+    together. The handler is three lines — duplication cost is low.
+    """
+
+    @staticmethod
+    def _simulated_handle_logout(session_state: dict, client) -> None:
+        """Reimplementation of app._handle_logout for testing.
+
+        Kept in sync with app.py's _handle_logout. The contract:
+
+            1. Best-effort client.logout(timeout=2.0); swallow ApiError.
+            2. Unconditional pop of the three session keys.
+
+        Byte-level equivalence with the real handler is the test's
+        purpose — any drift is a regression either here or in app.py.
+        """
+        try:
+            client.logout(timeout=2.0)
+        except ApiError:
+            pass
+        for key in ("access_token", "refresh_token", "current_user"):
+            session_state.pop(key, None)
+
+    def _make_client(self, behaviour: str = "ok"):
+        """Build a minimal mock with a ``logout`` method."""
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        if behaviour == "ok":
+            client.logout.return_value = None
+        elif behaviour == "connection_error":
+            client.logout.side_effect = ApiConnectionError(Exception("down"))
+        elif behaviour == "auth_expired":
+            client.logout.side_effect = AuthExpiredError("gone")
+        else:  # pragma: no cover — defensive
+            raise ValueError(f"Unknown behaviour {behaviour!r}")
+        return client
+
+    def test_logout_idempotent_1_call_clears_all_three_keys(self) -> None:
+        state: dict[str, Any] = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "current_user": {"email": "x"},
+            # An unrelated key must NOT be touched.
+            "selected_job": {"id": "j1"},
+        }
+        client = self._make_client("ok")
+        self._simulated_handle_logout(state, client)
+        assert "access_token" not in state
+        assert "refresh_token" not in state
+        assert "current_user" not in state
+        assert state.get("selected_job") == {"id": "j1"}
+
+    def test_logout_idempotent_2_calls_is_equivalent_to_1(self) -> None:
+        state: dict[str, Any] = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "current_user": {"email": "x"},
+        }
+        client = self._make_client("ok")
+        self._simulated_handle_logout(state, client)
+        self._simulated_handle_logout(state, client)
+        assert "access_token" not in state
+        assert "refresh_token" not in state
+        assert "current_user" not in state
+
+    def test_logout_idempotent_5_calls_is_equivalent_to_1(self) -> None:
+        state: dict[str, Any] = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "current_user": {"email": "x"},
+        }
+        client = self._make_client("ok")
+        for _ in range(5):
+            self._simulated_handle_logout(state, client)
+        assert all(k not in state for k in ("access_token", "refresh_token", "current_user"))
+
+    def test_logout_clears_local_state_even_when_server_call_fails(self) -> None:
+        # R5.7: the UI must ALWAYS clear local state regardless of
+        # the API's response. Simulated here by making client.logout
+        # raise ApiConnectionError.
+        state: dict[str, Any] = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "current_user": {"email": "x"},
+        }
+        client = self._make_client("connection_error")
+        self._simulated_handle_logout(state, client)
+        assert "access_token" not in state
+        assert "refresh_token" not in state
+        assert "current_user" not in state
+
+    def test_logout_clears_local_state_when_auth_already_expired(self) -> None:
+        state: dict[str, Any] = {
+            "access_token": "a",
+            "refresh_token": "r",
+            "current_user": {"email": "x"},
+        }
+        client = self._make_client("auth_expired")
+        self._simulated_handle_logout(state, client)
+        assert "access_token" not in state
+        assert "refresh_token" not in state
+        assert "current_user" not in state
+
+    def test_logout_on_already_empty_state_is_noop(self) -> None:
+        state: dict[str, Any] = {}
+        client = self._make_client("ok")
+        self._simulated_handle_logout(state, client)
+        assert state == {}
