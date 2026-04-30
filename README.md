@@ -1,14 +1,17 @@
 # Skill-Bridge Career Navigator
 
 [![CI](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml/badge.svg)](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml)
+[![Build & Publish](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/build-and-publish.yml)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](https://github.com/kkhanchi/skill-bridge-career-navigator/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy: strict](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
 
+🌐 **[Live API](https://skillbridge-api.onrender.com)** — free-tier deploy on Render. First visit after ~15 min of idle may take up to 30 s to cold-start.
+
 🎥 **[Watch the Video Presentation](https://drive.google.com/file/d/1fNGElHl7o5CnxIvw-AoDvFN7fmro8Gxe/view?usp=drive_link)**
 
-🚀 **[Try the Live App](https://skill-bridge-career-navigator-kaczqrtu9jxfbxlywg9miu.streamlit.app/)**
+🚀 **[Try the Streamlit Reference UI](https://skill-bridge-career-navigator-kaczqrtu9jxfbxlywg9miu.streamlit.app/)**
 
 ---
 
@@ -142,7 +145,84 @@ See `.kiro/specs/phase-3-auth/` for full design and requirements, and ADRs [012]
 
 ---
 
-## Phase 4 — Testing & Quality (current)
+## Phase 5 — Docker, CI/CD, Deployment (current)
+
+Phase 5 takes the application from "green CI" to "a public URL." Zero runtime behaviour change — everything shipped is packaging and operations.
+
+**What shipped in Phase 5:**
+- **Multi-stage Dockerfile** (`skill-bridge/Dockerfile`): Python 3.12-slim base, `builder` stage installs deps with `build-essential + libpq-dev`, `runtime` stage copies the installed env over and drops to `libpq5` only. Non-root user (UID 10001), fixed `$PORT` default of 5000. Target size under 250 MB.
+- **`entrypoint.sh`**: POSIX sh, `set -e`, runs `alembic upgrade head` then `exec gunicorn --workers 1 --bind 0.0.0.0:$PORT wsgi:application`. Exec is critical for signal propagation — SIGTERM goes straight to gunicorn.
+- **`docker-compose.yml`**: local-dev orchestration (API + Postgres 16 Alpine). Compose waits for Postgres to be healthy (`pg_isready`) before starting the API, so the migration never fires against a not-ready DB. Named `postgres_data` volume survives `compose down`.
+- **GitHub Actions `build-and-publish.yml`**: on every push to main, blocks until the Phase 4 `ci.yml` quality gate passes for the same SHA, then builds the image and pushes to `ghcr.io/kkhanchi/skill-bridge-career-navigator`. Tags: `latest`, `sha-<short>`, `vX.Y.Z`. Layer caching via `type=gha mode=max`.
+- **`render.yaml` blueprint**: declarative service + managed Postgres definition. Web service runs the Docker image, `preDeployCommand: alembic upgrade head` gates every deploy on migration success (fail-closed if a migration breaks). `JWT_SECRET` and other secrets live in Render's dashboard, never in the blueprint.
+- **Single ADR-019** consolidating all Phase 5 decisions.
+
+### Deploy workflow
+
+```
+push to main
+    ↓
+GitHub Actions: ci.yml (lint + mypy + tests + coverage)
+    ↓ green
+GitHub Actions: build-and-publish.yml
+    ↓
+ghcr.io/kkhanchi/skill-bridge-career-navigator:latest
+    ↓
+Render (pulls on deploy) → alembic upgrade head → gunicorn → health check passes → traffic shifts
+```
+
+### Run locally via Docker
+
+```bash
+cd skill-bridge
+cp .env.example .env       # set JWT_SECRET
+make compose-up            # docker compose up -d, builds the image
+make smoke                 # curl /health, asserts 200
+make compose-down          # teardown; add -v to wipe the postgres volume
+```
+
+### Architecture
+
+```
+┌────────────┐     HTTPS     ┌───────────────────────────────────┐
+│  Browser   │──────────────▶│  Render (free tier, Oregon)        │
+│  curl / UI │               │  ┌─────────────────────────────┐   │
+└────────────┘               │  │  skillbridge-api container   │   │
+                             │  │  gunicorn -w 1 on $PORT      │   │
+                             │  │  image: ghcr.io/.../:latest  │   │
+                             │  └──────────────┬──────────────┘   │
+                             │                 │                   │
+                             │                 ▼                   │
+                             │  ┌─────────────────────────────┐   │
+                             │  │  skillbridge-db (managed)    │   │
+                             │  │  Postgres 16 free tier       │   │
+                             │  └─────────────────────────────┘   │
+                             └───────────────────────────────────┘
+                                           ▲
+                                           │ docker pull
+                                           │
+                              ┌────────────┴───────────┐
+                              │  ghcr.io/<owner>/<repo>│
+                              │  :latest :sha-xxx      │
+                              └────────────▲───────────┘
+                                           │ docker push
+                                           │
+                              ┌────────────┴───────────┐
+                              │  GitHub Actions        │
+                              │  ci.yml → build-and-   │
+                              │  publish.yml           │
+                              └────────────────────────┘
+```
+
+### Cold start caveat
+
+Render's free tier spins down services after ~15 minutes of idle traffic. The first request after a cold stop takes up to 30 s while the container starts and `alembic upgrade head` runs. Warm requests respond in milliseconds.
+
+See [ADR-019](decisions/ADR-019-deploy-architecture.md) for the full architecture decision record covering Docker, GHCR, Render, and the stdout-logs-over-observability-stack tradeoff.
+
+---
+
+## Phase 4 — Testing & Quality
 
 Phase 4 formalizes the development loop around Phases 1-3's code. Zero runtime behaviour change — what's new is enforcement, measurement, and tooling.
 

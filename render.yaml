@@ -1,0 +1,71 @@
+# Render Blueprint for SkillBridge.
+#
+# https://render.com/docs/blueprint-spec
+#
+# One-time setup: go to render.com → New → Blueprint → select this
+# repo, branch main. Render parses this file and provisions the
+# declared services + database. After initial provisioning, every
+# push to main triggers a redeploy.
+#
+# Values marked `sync: false` are NOT populated by the blueprint —
+# set them once in Render's dashboard after provisioning. This
+# keeps secrets out of version control. JWT_SECRET is mandatory
+# (ADR-013); CORS_ORIGINS and GROQ_API_KEY are optional.
+#
+# See ADR-019 for the full architecture rationale.
+
+services:
+  # The Flask API, served from a Docker image built from our
+  # multi-stage Dockerfile. Render builds the image on each deploy
+  # using the dockerfile at the specified path — we don't currently
+  # pull from GHCR for Render's deploys, though a future phase
+  # could switch to `image:` for faster Render builds.
+  - type: web
+    name: skillbridge-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render's HTTP probe hits this path; /health is the public
+    # unauthenticated liveness endpoint shipped in Phase 1. The
+    # probe deliberately does NOT check the DB (ADR-019 §6).
+    healthCheckPath: /health
+    # preDeployCommand runs BEFORE the new container starts serving
+    # traffic. Failed migrations abort the deploy and the old
+    # container keeps serving — fail-closed semantics.
+    preDeployCommand: "alembic upgrade head"
+    envVars:
+      - key: APP_ENV
+        value: prod
+      # Render's convention: services bind to $PORT. 10000 is
+      # Render's default; our Dockerfile defaults to 5000 for
+      # compose parity, and $PORT overrides that at runtime.
+      - key: PORT
+        value: "10000"
+      # Required secret — set in Render dashboard. Empty value
+      # triggers the fail-loud check in app/extensions.py.
+      - key: JWT_SECRET
+        sync: false
+      # Optional — empty means FallbackCategorizer.
+      - key: GROQ_API_KEY
+        sync: false
+      # CORS allowlist — comma-separated or "*". Set to the
+      # Streamlit URL once the UI is wired to the deployed API.
+      - key: CORS_ORIGINS
+        sync: false
+      # Auto-populated by Render from the skillbridge-db service
+      # below. No manual copy-paste of credentials.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skillbridge-db
+          property: connectionString
+
+databases:
+  # Managed Postgres 16. Free tier is 1 GB storage + 90-day data
+  # retention. Fine for a portfolio project; not fine for real
+  # traffic, but scaling is a future-phase problem.
+  - name: skillbridge-db
+    plan: free
+    databaseName: skillbridge
+    user: skillbridge
