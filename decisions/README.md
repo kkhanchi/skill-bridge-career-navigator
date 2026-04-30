@@ -28,3 +28,11 @@ ADR that supersedes it and note the supersession in both files.
 - [ADR-004: Correlation ID propagation via flask.g + stdlib logging](./ADR-004-correlation-id-and-logging.md)
 - [ADR-005: Stable slug IDs for jobs](./ADR-005-stable-slug-job-ids.md)
 - [ADR-006: Streamlit UI kept via root-level shims during Phase 1](./ADR-006-streamlit-shims.md)
+
+## Phase 2 ADRs
+
+- [ADR-007: Dual-backend repositories (memory + SQLAlchemy)](./ADR-007-dual-backend-repositories.md)
+- [ADR-008: Alembic workflow + env.py design](./ADR-008-alembic-workflow.md)
+- [ADR-009: Session-per-request via before_request / teardown_request](./ADR-009-session-per-request.md)
+- [ADR-010: JSONB portability via SQLAlchemy variants](./ADR-010-jsonb-portability.md)
+- [ADR-011: Only jobs migrated to DB in Phase 2 (catalog-vs-DB boundary)](./ADR-011-catalog-vs-db-boundary.md)

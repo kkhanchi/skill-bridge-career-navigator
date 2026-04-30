@@ -68,16 +68,23 @@ cp .env.example .env
 streamlit run app.py
 ```
 
-**Option 2 — Flask REST API** (Phase 1):
+**Option 2 — Flask REST API** (Phases 1 & 2):
 ```bash
+# First-time setup (Phase 2 persistence):
+APP_ENV=dev alembic upgrade head        # create schema in skill-bridge-dev.db
+python -m scripts.seed_db               # load jobs catalog from data/jobs.json
+
 # Development server
 python run.py
 
-# Or production-style with gunicorn (single worker — see ADR-003)
-gunicorn -w 1 wsgi:application
+# Production-style with gunicorn
+# Phase 2 onwards (SQL backend): multi-worker is safe
+gunicorn -w 4 wsgi:application
+# Phase 1-style memory backend (REPO_BACKEND=memory): single worker only
+REPO_BACKEND=memory gunicorn -w 1 wsgi:application
 ```
 
-See [`API.md`](API.md) for endpoint reference and curl recipes, and [`.kiro/specs/phase-1-rest-api/`](../.kiro/specs/phase-1-rest-api/) for the Phase 1 design, requirements, and task breakdown.
+See [`API.md`](API.md) for endpoint reference and curl recipes, and [`.kiro/specs/`](../.kiro/specs/) for the full per-phase design, requirements, and task breakdowns.
 
 ### Test Commands
 ```bash
@@ -87,7 +94,38 @@ pytest tests/ -v
 
 ---
 
-## Phase 1 — REST API Foundation (current)
+## Phase 2 — Persistence (current)
+
+Phase 2 replaces Phase 1's in-memory repositories with a real relational database. Both backends coexist behind one `typing.Protocol` seam (see [ADR-007](decisions/ADR-007-dual-backend-repositories.md)), and backend selection is driven at app-factory time by environment variables:
+
+```bash
+# No DATABASE_URL set -> in-memory repos (Phase 1 flow, single-worker)
+python run.py
+
+# SQLite file -> SQL backend (dev default)
+DATABASE_URL="sqlite:///./skillbridge.db" python run.py
+
+# Postgres -> SQL backend (prod)
+DATABASE_URL="postgresql://user:pw@host/db" gunicorn -w 4 wsgi:application
+
+# Force memory even with a DATABASE_URL in scope (benchmarks, tests)
+REPO_BACKEND=memory python run.py
+```
+
+**What shipped in Phase 2:**
+- SQLAlchemy 2.x declarative ORM (`app/db/models.py`) covering 5 tables (users, profiles, jobs, analyses, roadmaps)
+- Alembic migrations under `migrations/` with one initial migration + a CI-friendly round-trip smoke test
+- Second family of repositories (`SqlAlchemy*Repository`) conforming to the Phase 1 Protocols — handlers didn't change
+- Request-scoped session hooks (`before_request` open / `teardown_request` commit or rollback + close) — memory backend stays zero-overhead
+- Idempotent `scripts/seed_db.py` that loads `data/jobs.json` into the `jobs` table with slug ids matching Phase 1's in-memory repo
+- JSON columns portable via `JSON().with_variant(JSONB(), "postgresql")` ([ADR-010](decisions/ADR-010-jsonb-portability.md))
+- 157 tests, including 5 Hypothesis property tests: repository-backend equivalence (the load-bearing proof the Protocol seam works), seed idempotency, slug stability, SQL pagination partition, JSONB round-trip
+
+The `users` table is created now but `user_id` foreign keys stay nullable until Phase 3 wires authentication.
+
+---
+
+## Phase 1 — REST API Foundation
 
 The project is evolving from a Streamlit prototype into a production-quality backend. Phase 1 adds a Flask REST API under `/api/v1/` that exposes the existing business logic over HTTP.
 
@@ -99,9 +137,9 @@ The project is evolving from a Streamlit prototype into a production-quality bac
 - Repository pattern behind `typing.Protocol` interfaces (Phase 2 slots SQLAlchemy in without touching handlers)
 - 89 tests: unit + integration + 5 Hypothesis property tests covering round-trip, pagination partition, case-insensitivity, completion monotonicity, and error envelope shape
 
-See [`API.md`](API.md) for the endpoint reference, the [`decisions/`](decisions/) folder for ADRs explaining the non-trivial choices, and [`.kiro/specs/phase-1-rest-api/`](../.kiro/specs/phase-1-rest-api/) for the full spec.
+See [`API.md`](API.md) for the endpoint reference, the [`decisions/`](decisions/) folder for ADRs explaining the non-trivial choices, and [`.kiro/specs/`](../.kiro/specs/) for the full per-phase specs.
 
-The Streamlit UI continues to work unchanged throughout Phase 1 via root-level shim modules (see [ADR-006](decisions/ADR-006-streamlit-shims.md)).
+The Streamlit UI continues to work unchanged via root-level shim modules (see [ADR-006](decisions/ADR-006-streamlit-shims.md)).
 
 ---
 
