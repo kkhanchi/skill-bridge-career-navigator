@@ -41,22 +41,59 @@ class BaseConfig:
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
 
+    # --- Phase 2: persistence --------------------------------------------
+    # Empty string means "no SQL backend — use the in-memory repositories".
+    # `REPO_BACKEND` is an explicit override ("memory" | "sqlite" | "postgres")
+    # that wins over DATABASE_URL when set; Extensions.pick_backend uses it
+    # to force the in-memory path in tests even if a real DATABASE_URL is
+    # present in the developer's shell environment.
+    DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
+    REPO_BACKEND: str = os.environ.get("REPO_BACKEND", "")
+    SQLALCHEMY_ECHO: bool = False
+
 
 class DevConfig(BaseConfig):
-    """Local development: verbose JSON logs, Groq key read from env."""
+    """Local development: verbose JSON logs, Groq key read from env.
+
+    Phase 2: defaults `DATABASE_URL` to a local SQLite file so that
+    `python run.py` works without any env setup. An explicit
+    `DATABASE_URL` env var takes precedence.
+    """
 
     LOG_LEVEL = "DEBUG"
+    DATABASE_URL = os.environ.get(
+        "DATABASE_URL",
+        f"sqlite:///{_PKG_ROOT / 'skill-bridge-dev.db'}",
+    )
 
 
 class TestConfig(BaseConfig):
     """Test runs: deterministic fallback categorizer, plain-text logs.
 
     Tests assert on log lines and must not depend on Groq network calls.
+    Phase 2: `REPO_BACKEND="memory"` is explicitly forced so that all 89
+    Phase 1 tests continue to run against the in-memory repositories as
+    a regression baseline — independent of whatever DATABASE_URL the
+    developer has in their shell (R3.5).
     """
 
     APP_ENV = "test"
     JSON_LOGS = False
     GROQ_API_KEY = ""
+    REPO_BACKEND = "memory"
+
+
+class TestSqlConfig(BaseConfig):
+    """Test runs against the SQL backend (Phase 2).
+
+    Uses an in-process SQLite database that vanishes when the test
+    Python process exits. Selected via ``create_app("test_sql")``.
+    """
+
+    APP_ENV = "test"
+    JSON_LOGS = False
+    GROQ_API_KEY = ""
+    DATABASE_URL = "sqlite:///:memory:"
 
 
 class ProdConfig(BaseConfig):
@@ -68,5 +105,6 @@ class ProdConfig(BaseConfig):
 CONFIG_MAP: dict[str, type[BaseConfig]] = {
     "dev": DevConfig,
     "test": TestConfig,
+    "test_sql": TestSqlConfig,
     "prod": ProdConfig,
 }
