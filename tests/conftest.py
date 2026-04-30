@@ -77,3 +77,32 @@ def app():
 def client(app):
     """Flask test client bound to the per-test app instance."""
     return app.test_client()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 SQL fixtures.
+#
+# `sql_app` / `sql_client` parallel the Phase 1 `app` / `client` fixtures
+# but bind the SQL backend via create_app("test_sql"). The schema is
+# applied via Base.metadata.create_all for speed; Alembic migration
+# correctness is tested separately in test_alembic_smoke.py. Each test
+# gets a fresh in-memory SQLite DB so state is isolated per-test.
+# ---------------------------------------------------------------------------
+
+from app.db.base import Base as _Base
+
+
+@pytest.fixture
+def sql_app():
+    """Flask app bound to sqlite:///:memory: with the Phase 2 schema applied."""
+    app = create_app("test_sql")
+    ext = app.extensions["skillbridge"]
+    with app.app_context():
+        _Base.metadata.create_all(ext.engine)
+    yield app
+
+
+@pytest.fixture
+def sql_client(sql_app):
+    """Flask test client bound to the per-test SQL app instance."""
+    return sql_app.test_client()
