@@ -26,15 +26,23 @@ logger = logging.getLogger(__name__)
 
 
 def _register_request_hooks(app: Flask) -> None:
-    """Install before/after_request hooks for correlation id + access logs.
+    """Install before/after_request hooks.
 
-    Contract:
+    Phase 1 hooks (correlation id + access logs):
       - Every request binds ``g.correlation_id`` from the inbound
         ``X-Correlation-ID`` header, falling back to a fresh uuid4 hex.
       - Every response echoes the id back in ``X-Correlation-ID`` (R7.3).
       - Two log lines per request: ``request.start`` (method, path) and
         ``request.end`` (status, duration_ms). Request bodies are never
         logged (R7.6).
+
+    Phase 2 hooks (request-scoped SQL session):
+      - When a SQL engine is bound, ``before_request`` opens a
+        :class:`Session` and stashes it on ``g.db_session``.
+      - ``teardown_request`` commits on success, rolls back on
+        exception, always closes.
+      - On the memory backend these hooks are no-ops (no engine on the
+        Extensions bundle). R4.4.
     """
 
     @app.before_request
@@ -46,6 +54,18 @@ def _register_request_hooks(app: Flask) -> None:
             "request.start",
             extra={"extra_fields": {"method": request.method, "path": request.path}},
         )
+
+    @app.before_request
+    def _db_session_start() -> None:
+        # Only open a session when a SQL backend is bound. The memory
+        # backend path leaves g.db_session unset; any repo that
+        # mistakenly reaches for `get_db_session()` then hits a clear
+        # RuntimeError rather than silently operating on a stale
+        # module-level factory.
+        ext = app.extensions.get("skillbridge")
+        if ext is None or ext.session_factory is None:
+            return
+        g.db_session = ext.session_factory()
 
     @app.after_request
     def _cid_end(response):
@@ -64,6 +84,32 @@ def _register_request_hooks(app: Flask) -> None:
             }},
         )
         return response
+
+    @app.teardown_request
+    def _db_session_end(exception: BaseException | None) -> None:
+        # Pop unconditionally so a session that got opened always gets
+        # closed — even if commit or rollback itself raises.
+        session = g.pop("db_session", None)
+        if session is None:
+            return
+        try:
+            if exception is None:
+                session.commit()
+            else:
+                session.rollback()
+        except Exception:
+            # Log but don't re-raise — Flask is already unwinding from
+            # the original exception (or returning a response) and
+            # swallowing here gives the user the original error
+            # surface, not a secondary DB failure message.
+            # Do NOT include connection-string values in this log (R10.1).
+            logger.exception("db_session.teardown_failed")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+        finally:
+            session.close()
 
 
 def _register_blueprints(app: Flask) -> None:

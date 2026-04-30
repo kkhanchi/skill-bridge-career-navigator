@@ -47,6 +47,10 @@ from app.repositories.base import (
 from app.repositories.job_repo import InMemoryJobRepository
 from app.repositories.profile_repo import InMemoryProfileRepository
 from app.repositories.roadmap_repo import InMemoryRoadmapRepository
+from app.repositories.sql_analysis_repo import SqlAlchemyAnalysisRepository
+from app.repositories.sql_job_repo import SqlAlchemyJobRepository
+from app.repositories.sql_profile_repo import SqlAlchemyProfileRepository
+from app.repositories.sql_roadmap_repo import SqlAlchemyRoadmapRepository
 
 logger = logging.getLogger(__name__)
 
@@ -58,21 +62,35 @@ _EXT_KEY = "skillbridge"
 # ---------------------------------------------------------------------------
 
 
+def _config_value(config, key: str) -> str:
+    """Read a config value supporting both Flask ``app.config`` (dict)
+    and config classes with class-level attributes (unit tests).
+    """
+    if hasattr(config, "get") and not isinstance(config, type):
+        value = config.get(key, "")
+    else:
+        value = getattr(config, key, "")
+    return str(value or "").strip()
+
+
 def pick_backend(config) -> str:
     """Pick the repository backend for *config*.
 
     Returns one of ``"memory"``, ``"sqlite"``, or ``"postgres"``.
 
     Args:
-        config: A config instance or class exposing ``REPO_BACKEND`` and
-            ``DATABASE_URL`` attributes.
+        config: Either a Flask ``app.config`` (dict-backed) or a
+            config class / instance exposing ``REPO_BACKEND`` and
+            ``DATABASE_URL`` as attributes. Supports both so the
+            helper can be called from ``init_extensions`` (dict) and
+            from unit tests (class).
 
     Raises:
         RuntimeError: When ``DATABASE_URL`` uses a scheme other than
             ``sqlite:`` or ``postgresql:`` (and ``REPO_BACKEND`` isn't
             set to override).
     """
-    explicit = str(getattr(config, "REPO_BACKEND", "") or "").strip()
+    explicit = _config_value(config, "REPO_BACKEND")
     if explicit:
         if explicit not in {"memory", "sqlite", "postgres"}:
             raise RuntimeError(
@@ -81,7 +99,7 @@ def pick_backend(config) -> str:
             )
         return explicit
 
-    url = str(getattr(config, "DATABASE_URL", "") or "").strip()
+    url = _config_value(config, "DATABASE_URL")
     if not url:
         return "memory"
 
@@ -198,25 +216,38 @@ def _build_memory_extensions(app: Flask) -> Extensions:
 def _build_sql_extensions(app: Flask, backend: str) -> Extensions:
     """Build a SQL-backed Extensions bundle.
 
-    Stage C wires the engine, sessionmaker, and the
-    (taxonomy/resources/categorizer) side of things — the repository
-    instances themselves are still :class:`InMemory*` placeholders
-    here; Stage F swaps in the :class:`SqlAlchemy*` concretes.
-
-    This staged approach lets Stage C's test gate verify the backend
-    selector, engine factory, and session wiring in isolation without
-    blocking on repository code that doesn't exist yet.
-
-    Raises:
-        NotImplementedError: The SQL branch is wired for engine/session
-            but Stage F hasn't added the Sql repositories yet. Any
-            config that actually selects a SQL backend (including
-            ``create_app("test_sql")``) will hit this until Stage F.
+    Wires the engine, sessionmaker, and the four
+    :class:`SqlAlchemy*Repository` classes — plus reuses the memory
+    backend's taxonomy/resources/categorizer path because those stay
+    as startup-loaded JSON regardless of backend (R9.2, R9.3).
     """
-    raise NotImplementedError(
-        f"SQL backend {backend!r} selected but SqlAlchemy repositories "
-        "land in Phase 2 Stage F. Wire them in _build_sql_extensions "
-        "once the four SqlAlchemy*Repository classes exist."
+    database_url = str(app.config.get("DATABASE_URL", "") or "")
+    echo = bool(app.config.get("SQLALCHEMY_ECHO", False))
+
+    engine = build_engine(database_url, echo=echo)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    # Catalog data stays on disk even under the SQL backend.
+    taxonomy_path = app.config["TAXONOMY_PATH"]
+    resources_path = app.config["RESOURCES_PATH"]
+    taxonomy = load_taxonomy(taxonomy_path)
+    resources = _load_resources(resources_path)
+
+    return Extensions(
+        profile_repo=SqlAlchemyProfileRepository(),
+        job_repo=SqlAlchemyJobRepository(),
+        analysis_repo=SqlAlchemyAnalysisRepository(),
+        roadmap_repo=SqlAlchemyRoadmapRepository(),
+        taxonomy=taxonomy,
+        resources=resources,
+        categorizer=_select_categorizer(app),
+        engine=engine,
+        session_factory=session_factory,
+        _jobs_path=str(app.config.get("JOBS_PATH", "")),
+        _taxonomy_path=taxonomy_path,
+        _resources_path=resources_path,
+        _backend=backend,
+        _database_url=database_url,
     )
 
 
