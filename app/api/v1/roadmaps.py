@@ -33,6 +33,7 @@ Requirement reference: R5.1–R5.5, R6.1, R6.3, R6.5, R9.1, R13.7.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from flask import Blueprint, jsonify
@@ -59,7 +60,7 @@ from app.utils.validation import validate_body
 bp = Blueprint("roadmaps", __name__)
 
 
-def _serialize(record: RoadmapRecord) -> dict:
+def _serialize(record: RoadmapRecord) -> dict[str, Any]:
     return RoadmapResponse(
         id=record.id,
         analysis_id=record.analysis_id,

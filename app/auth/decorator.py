@@ -24,7 +24,9 @@ Requirement reference: R5.2, R5.3, R5.4, R13.7, R13.8.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import wraps
+from typing import Any, TypeVar
 
 from flask import g, request
 
@@ -38,8 +40,10 @@ from app.utils.errors import (
 
 _BEARER_PREFIX = "Bearer "
 
+F = TypeVar("F", bound=Callable[..., Any])
 
-def require_auth(fn):
+
+def require_auth(fn: F) -> F:
     """Require a valid access token on the wrapped handler.
 
     On success, the handler receives a ``current_user`` keyword
@@ -50,7 +54,7 @@ def require_auth(fn):
     """
 
     @wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         header = request.headers.get("Authorization", "")
         if not header or not header.startswith(_BEARER_PREFIX):
             # Missing or malformed header. Per the design matrix this
@@ -95,4 +99,4 @@ def require_auth(fn):
         kwargs["current_user"] = user
         return fn(*args, **kwargs)
 
-    return wrapper
+    return wrapper  # type: ignore[return-value]

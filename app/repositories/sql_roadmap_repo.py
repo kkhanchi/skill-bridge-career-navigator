@@ -11,7 +11,13 @@ The PATCH-a-resource handler is the interesting one:
   and the PATCH becomes a no-op on next read. This is the exact
   bug R7.1 + R7.3 exist to catch.
 
-Requirement reference: R2.1, R2.2, R7.1, R7.2, R7.3, R7.5.
+Phase 3 note: roadmaps have no ``user_id`` column — ownership is
+carried transitively by the parent analysis's ``user_id``. The
+``*_for_user`` methods JOIN through ``analyses`` to filter on
+``analyses.user_id``.
+
+Requirement reference: R2.1, R2.2, R7.1, R7.2, R7.3, R7.5, R12.1,
+R12.3, R12.7.
 """
 
 from __future__ import annotations
@@ -32,6 +38,8 @@ from app.repositories.base import RoadmapRecord
 
 class SqlAlchemyRoadmapRepository:
     """Repository Protocol impl for roadmaps + resource updates."""
+
+    # ---- Phase 1/2 methods ---------------------------------------------
 
     def create(self, record: RoadmapRecord) -> RoadmapRecord:
         session = get_db_session()
@@ -94,57 +102,48 @@ class SqlAlchemyRoadmapRepository:
 
         return roadmap_record_from_row(row)
 
+    # ---- Phase 3 multi-tenant methods ----------------------------------
 
-# ---------------------------------------------------------------------------
-# Phase 3 multi-tenant methods
-# ---------------------------------------------------------------------------
-#
-# Roadmaps have no ``user_id`` column of their own — ownership is
-# carried by the roadmap's parent analysis. ``get_for_user`` JOINs
-# through to ``analyses.user_id`` so the query returns rows only when
-# the caller owns the originating analysis.
+    def create_for_user(self, user_id: str, record: RoadmapRecord) -> RoadmapRecord:
+        """Persist a roadmap owned (transitively) by ``user_id``.
 
+        The ``user_id`` argument is retained for API symmetry across
+        the three repositories. ``roadmaps`` itself has no ownership
+        column, so the argument is unused at write time — ownership
+        is derived via the referenced analysis's ``user_id``.
+        """
+        del user_id  # intentional: carried by roadmap.analysis_id's user
+        return self.create(record)
 
-def _create_for_user(self, user_id, record):
-    """Persist a roadmap owned (transitively) by ``user_id``.
+    def get_for_user(self, roadmap_id: str, user_id: str) -> RoadmapRecord | None:
+        """Fetch only when the owning analysis belongs to ``user_id``.
 
-    The ``user_id`` argument is retained for API symmetry across the
-    three repositories. ``roadmaps`` itself has no ownership column,
-    so the argument is unused at write time — ownership is derived
-    via the referenced analysis's ``user_id``.
-    """
-    del user_id  # intentional: carried by roadmap.analysis_id's user
-    return self.create(record)
+        JOINs roadmaps -> analyses and filters on analyses.user_id.
+        Anti-enumeration (R12.7): wrong-owner is invisible.
+        """
+        session = get_db_session()
+        row = session.scalar(
+            select(RoadmapORM)
+            .join(AnalysisORM, RoadmapORM.analysis_id == AnalysisORM.id)
+            .where((RoadmapORM.id == roadmap_id) & (AnalysisORM.user_id == user_id))
+        )
+        return roadmap_record_from_row(row) if row is not None else None
 
+    def update_resource_for_user(
+        self,
+        roadmap_id: str,
+        resource_id: str,
+        user_id: str,
+        completed: bool,
+    ) -> RoadmapRecord | None:
+        """Update a resource only if the owning analysis belongs to ``user_id``.
 
-def _get_for_user(self, roadmap_id, user_id):
-    """Fetch only when the owning analysis belongs to ``user_id``.
-
-    JOINs roadmaps -> analyses and filters on analyses.user_id.
-    Anti-enumeration (R12.7): wrong-owner is invisible.
-    """
-    session = get_db_session()
-    row = session.scalar(
-        select(RoadmapORM)
-        .join(AnalysisORM, RoadmapORM.analysis_id == AnalysisORM.id)
-        .where((RoadmapORM.id == roadmap_id) & (AnalysisORM.user_id == user_id))
-    )
-    return roadmap_record_from_row(row) if row is not None else None
-
-
-def _update_resource_for_user(self, roadmap_id, resource_id, user_id, completed):
-    """Update a resource only if the owning analysis belongs to ``user_id``.
-
-    Ownership gate first; the mutation then reuses ``update_resource``
-    so the ``flag_modified("phases")`` contract stays in one place.
-    Two queries on the ownership path is an acceptable price for
-    keeping the JSON-mutation invariant in a single method.
-    """
-    if self.get_for_user(roadmap_id, user_id) is None:
-        return None
-    return self.update_resource(roadmap_id, resource_id, completed)
-
-
-SqlAlchemyRoadmapRepository.create_for_user = _create_for_user
-SqlAlchemyRoadmapRepository.get_for_user = _get_for_user
-SqlAlchemyRoadmapRepository.update_resource_for_user = _update_resource_for_user
+        Ownership gate first; the mutation then reuses
+        ``update_resource`` so the ``flag_modified("phases")``
+        contract stays in one place. Two queries on the ownership
+        path is an acceptable price for keeping the JSON-mutation
+        invariant in a single method.
+        """
+        if self.get_for_user(roadmap_id, user_id) is None:
+            return None
+        return self.update_resource(roadmap_id, resource_id, completed)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 from uuid import uuid4
 
 from flask import Flask, g, request
@@ -114,7 +115,7 @@ def _register_request_hooks(app: Flask) -> None:
         g.db_session = ext.session_factory()
 
     @app.after_request
-    def _cid_end(response):
+    def _cid_end(response: Any) -> Any:
         # Always emit the header, even on error responses (R6.6, R7.3).
         response.headers["X-Correlation-ID"] = getattr(g, "correlation_id", "-")
         start = getattr(g, "request_start", None)

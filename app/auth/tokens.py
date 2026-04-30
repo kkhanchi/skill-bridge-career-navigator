@@ -24,7 +24,8 @@ Requirement reference: R8.1, R8.2, R8.3, R8.6, R8.7.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import jwt
@@ -82,7 +83,8 @@ def _secret() -> str:
     code on prod. In tests and dev the config provides a literal
     default, so this read is safe at request time.
     """
-    return current_app.config["JWT_SECRET"]
+    secret: str = current_app.config["JWT_SECRET"]
+    return secret
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +151,7 @@ def encode_refresh_token(
 # ---------------------------------------------------------------------------
 
 
-def decode_token(token: str, *, expected_type: str) -> dict:
+def decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
     """Decode and verify a JWT, asserting `type == expected_type`.
 
     Success path returns the full claims dict with at minimum
@@ -193,13 +195,13 @@ def decode_token(token: str, *, expected_type: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _timedelta_seconds(seconds: int):
+def _timedelta_seconds(seconds: int) -> timedelta:
     """Small helper keeping the top-of-file import list tidy.
 
     `datetime.timedelta` is the only piece of `datetime` we use
     arithmetically and only in the two encoders. Centralising it here
     makes the call sites read as plain `issued_at + delta`.
     """
-    from datetime import timedelta
+    return timedelta(seconds=seconds)
 
     return timedelta(seconds=seconds)

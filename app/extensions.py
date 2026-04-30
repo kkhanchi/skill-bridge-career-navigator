@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from flask import Flask, current_app
 from flask_limiter import Limiter
@@ -71,7 +72,7 @@ _EXT_KEY = "skillbridge"
 # ---------------------------------------------------------------------------
 
 
-def _config_value(config, key: str) -> str:
+def _config_value(config: Any, key: str) -> str:
     """Read a config value supporting both Flask ``app.config`` (dict)
     and config classes with class-level attributes (unit tests).
     """
@@ -82,7 +83,7 @@ def _config_value(config, key: str) -> str:
     return str(value or "").strip()
 
 
-def pick_backend(config) -> str:
+def pick_backend(config: Any) -> str:
     """Pick the repository backend for *config*.
 
     Returns one of ``"memory"``, ``"sqlite"``, or ``"postgres"``.
@@ -381,4 +382,5 @@ def _enforce_jwt_secret(app: Flask) -> None:
 def get_ext(app: Flask | None = None) -> Extensions:
     """Return the Extensions bundle for *app* (defaults to current_app)."""
     target = app if app is not None else current_app
-    return target.extensions[_EXT_KEY]
+    ext: Extensions = target.extensions[_EXT_KEY]
+    return ext

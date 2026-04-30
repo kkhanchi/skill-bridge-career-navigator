@@ -12,7 +12,8 @@ def load_taxonomy(path: str = "data/skill_taxonomy.json") -> list[str]:
     Returns a list of skill strings (≥50 entries expected).
     """
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        data: list[str] = json.load(f)
+    return data
 
 
 def parse_resume(text: str, taxonomy: list[str]) -> list[str]:

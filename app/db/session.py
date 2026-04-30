@@ -59,4 +59,5 @@ def get_db_session() -> Session:
         raise RuntimeError(
             "No DB session bound on flask.g — memory backend in use or request hooks not installed"
         )
+    assert isinstance(session, Session)
     return session

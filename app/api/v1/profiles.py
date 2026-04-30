@@ -21,6 +21,8 @@ Requirement reference: R1.1–R1.7, R6.1, R9.1, R13.7, R13.8.
 
 from __future__ import annotations
 
+from typing import Any
+
 from flask import Blueprint, jsonify
 
 from app.auth.decorator import require_auth
@@ -45,7 +47,7 @@ bp = Blueprint("profiles", __name__)
 # ---------------------------------------------------------------------------
 
 
-def _serialize(record: ProfileRecord) -> dict:
+def _serialize(record: ProfileRecord) -> dict[str, Any]:
     """Convert a :class:`ProfileRecord` to a JSON-ready dict via Pydantic."""
     return ProfileResponse(
         id=record.id,

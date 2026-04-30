@@ -49,6 +49,10 @@ ignore = [
     # The explicit form is clearer in the DB teardown hook where we
     # want the reader to SEE the swallow-and-continue intent.
     "SIM105",
+    # UP047 pushes PEP 695 generic syntax (`def f[T](...)`) over the
+    # TypeVar form. PEP 695 is py3.12+ only and some tooling still
+    # lags; we stay on TypeVar for now. Reconsider in Phase 5+.
+    "UP047",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -88,6 +92,14 @@ exclude = [
 warn_unused_ignores = true
 warn_redundant_casts = true
 
+# ai_engine is imported transitively so `exclude` on the file walk
+# doesn't help — mypy type-checks it as a dependency. Full errors-
+# ignored override keeps it out of the strict gate without forcing
+# us to annotate the Streamlit + Groq SDK code paths.
+[[tool.mypy.overrides]]
+module = "app.core.ai_engine"
+ignore_errors = true
+
 # Third-party libraries we use that don't ship type stubs.
 # `ignore_missing_imports = true` stops mypy from erroring on the
 # import line itself; individual call sites that want full types
@@ -119,6 +131,29 @@ module = [
     "roadmap_generator",
 ]
 ignore_errors = true
+
+# Flask view modules: handler functions chain through several
+# decorators (@require_auth, @_with_limit, @validate_body, @bp.post)
+# whose type propagation through Flask's own untyped decorators is
+# fragile under --strict. The handlers' runtime behaviour is heavily
+# integration-tested. We relax no-untyped-def here specifically to
+# avoid annotating return types of the form
+# `tuple[flask.Response, int]` on every one of the ~20 handlers —
+# the payoff is low and the mypy noise would be high.
+# Other strict rules (disallow-untyped-calls, return-value) still apply.
+[[tool.mypy.overrides]]
+module = [
+    "app.api.v1.analyses",
+    "app.api.v1.auth",
+    "app.api.v1.health",
+    "app.api.v1.jobs",
+    "app.api.v1.profiles",
+    "app.api.v1.resume",
+    "app.api.v1.roadmaps",
+]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,8 @@ Requirement reference: R1, R2, R3, R4, R5, R13.2.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from flask import Blueprint, jsonify
 
@@ -49,6 +51,8 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("auth", __name__)
 
+F = TypeVar("F", bound=Callable[..., Any])
+
 
 # ---------------------------------------------------------------------------
 # Lazy per-app limit decorators
@@ -61,14 +65,14 @@ bp = Blueprint("auth", __name__)
 # dynamically — same observable behaviour, just indirected.
 
 
-def _with_limit(limit_str: str):
+def _with_limit(limit_str: str) -> Callable[[F], F]:
     """Return a decorator that applies ``limiter.limit(limit_str)`` at request time."""
 
-    def decorator(fn):
+    def decorator(fn: F) -> F:
         from functools import wraps
 
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             limiter = get_ext().limiter
             if limiter is None:
                 # No limiter wired — behave as if the limit didn't exist.
@@ -77,7 +81,7 @@ def _with_limit(limit_str: str):
             limited = limiter.limit(limit_str)(fn)
             return limited(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -87,7 +91,7 @@ def _with_limit(limit_str: str):
 # ---------------------------------------------------------------------------
 
 
-def _serialize_user(user: UserRecord) -> dict:
+def _serialize_user(user: UserRecord) -> dict[str, Any]:
     return UserResponse(
         id=user.id,
         email=user.email,

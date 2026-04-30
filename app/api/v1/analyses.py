@@ -28,6 +28,7 @@ Requirement reference: R4.1–R4.6, R6.1, R6.4, R9.1, R13.7.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from flask import Blueprint, jsonify
@@ -53,7 +54,7 @@ from app.utils.validation import validate_body
 bp = Blueprint("analyses", __name__)
 
 
-def _serialize(record: AnalysisRecord) -> dict:
+def _serialize(record: AnalysisRecord) -> dict[str, Any]:
     return AnalysisResponse(
         id=record.id,
         profile_id=record.profile_id,

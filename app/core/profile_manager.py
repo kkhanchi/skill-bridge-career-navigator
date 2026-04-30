@@ -125,4 +125,5 @@ def load_profile() -> UserProfile | None:
     """Load profile from ``st.session_state``, or ``None`` if not found."""
     import streamlit as st
 
-    return st.session_state.get("user_profile", None)
+    profile: UserProfile | None = st.session_state.get("user_profile", None)
+    return profile
