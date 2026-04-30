@@ -202,6 +202,12 @@ addopts = [
     "--strict-markers",
     # Summary of all non-pass outcomes (x, f, E, s) at the end.
     "-ra",
+    # Phase 4 coverage: instrument app/ on every pytest run. The
+    # fail_under threshold lives in [tool.coverage.report] so plain
+    # `pytest` also gates on the 80% floor.
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
 ]
 filterwarnings = [
     # TestConfig's short JWT_SECRET triggers PyJWT's advisory
