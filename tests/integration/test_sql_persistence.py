@@ -26,6 +26,7 @@ from uuid import uuid4
 
 from app.db.models import JobORM, RoadmapORM
 from app.db.session import get_db_session  # noqa: F401  - for clarity
+from tests.factories import ProfileFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,6 +40,23 @@ VALID_PROFILE = {
     "education": "BSc",
     "target_role": "Backend Developer",
 }
+
+
+def _profile_payload_from_factory() -> dict:
+    """Build a profile POST payload using ProfileFactory (Phase 4 R7.5).
+
+    Factory produces a detached ORM instance; we project it down to
+    the Pydantic create-body shape. Proves the factory integrates
+    with the real HTTP test lifecycle, not just the round-trip test.
+    """
+    profile = ProfileFactory.build()
+    return {
+        "name": profile.name,
+        "skills": profile.skills,
+        "experience_years": profile.experience_years,
+        "education": profile.education,
+        "target_role": profile.target_role,
+    }
 
 
 def _seed_job(sql_app, **overrides) -> str:
@@ -68,8 +86,13 @@ def _seed_job(sql_app, **overrides) -> str:
 
 
 def test_profile_crud_round_trip_on_sql_backend(authenticated_sql_client):
+    # Use a factory-built payload instead of the hand-rolled VALID_PROFILE
+    # dict — Phase 4 R7.5 proof that factories slot into the real HTTP
+    # test lifecycle, not just the round-trip fixture.
+    payload = _profile_payload_from_factory()
+
     # POST -> 201 and id is a uuid4 hex.
-    created = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE)
+    created = authenticated_sql_client.post("/api/v1/profiles", json=payload)
     assert created.status_code == 201
     body = created.get_json()
     profile_id = body["id"]
