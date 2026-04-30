@@ -35,6 +35,18 @@ ROADMAP_NOT_FOUND = "ROADMAP_NOT_FOUND"
 RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
 INTERNAL_ERROR = "INTERNAL_ERROR"
 
+# Phase 3: authentication & authorization codes (R14.2).
+# These six extend the Phase 1 closed set; no other codes are introduced
+# in Phase 3. Library-internal exceptions (PyJWT, argon2-cffi,
+# flask-limiter) map to these via handlers or the @require_auth decorator
+# before reaching the response.
+AUTH_REQUIRED = "AUTH_REQUIRED"              # no / malformed Authorization header
+INVALID_CREDENTIALS = "INVALID_CREDENTIALS"  # login failed (unknown email OR wrong pw)
+TOKEN_EXPIRED = "TOKEN_EXPIRED"              # JWT exp has passed
+TOKEN_INVALID = "TOKEN_INVALID"              # bad signature/type/claims, or revoked refresh
+EMAIL_TAKEN = "EMAIL_TAKEN"                  # register collided with existing user
+RATE_LIMITED = "RATE_LIMITED"                # flask-limiter rejection
+
 # Mapping Flask HTTPException status codes to our own codes when the
 # framework raises them directly (e.g. unknown route -> 404).
 _HTTP_STATUS_TO_CODE: dict[int, str] = {
