@@ -40,7 +40,7 @@ from __future__ import annotations
 import os
 import sys
 
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
 from app.config import CONFIG_MAP
 from app.db.engine import build_engine
@@ -53,20 +53,22 @@ with engine.connect() as conn:
     insp = inspect(conn)
     tables = set(insp.get_table_names())
     has_schema = "users" in tables
-    has_alembic = "alembic_version" in tables
-    needs_stamp = False
-    if has_schema and not has_alembic:
-        needs_stamp = True
-    elif has_schema and has_alembic:
-        row = conn.execute(text("SELECT version_num FROM alembic_version")).first()
-        if row is None:
-            needs_stamp = True
 
-if needs_stamp:
-    print("[entrypoint] Detected stuck migration — stamping head", flush=True)
+# If our schema tables already exist, the DB is post-migration.
+# Force-stamp head regardless of whether alembic_version exists or
+# what it contains. This handles:
+#   - Tables created by a crashed prior run with no version row
+#   - Tables created but alembic_version contains a stale/partial
+#     revision (previous bug — DuplicateTable on retry)
+#   - A fresh copy of the DB restored from backup without alembic
+#     state
+# On a truly clean DB (no users table), fall through and let
+# alembic upgrade head create everything.
+if has_schema:
+    print("[entrypoint] Schema already present — stamping head", flush=True)
     sys.exit(42)
 else:
-    print("[entrypoint] Migration state is clean", flush=True)
+    print("[entrypoint] Clean DB — running migrations normally", flush=True)
     sys.exit(0)
 PY
 rc=$?
