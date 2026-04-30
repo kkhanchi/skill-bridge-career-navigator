@@ -7,7 +7,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy: strict](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
 
-🌐 **[Live API](https://skillbridge-api.onrender.com)** — free-tier deploy on Render. First visit after ~15 min of idle may take up to 30 s to cold-start.
+🌐 **[Live API](https://skillbridge-api-4foe.onrender.com)** — free-tier deploy on Render. First visit after ~15 min of idle may take up to 30 s to cold-start.
 
 🎥 **[Watch the Video Presentation](https://drive.google.com/file/d/1fNGElHl7o5CnxIvw-AoDvFN7fmro8Gxe/view?usp=drive_link)**
 
