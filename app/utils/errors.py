@@ -111,6 +111,29 @@ def register_error_handlers(app: Flask) -> None:
         )
         return _envelope(err.code, err.message, err.details), err.status
 
+    # Phase 3: map flask-limiter's RateLimitExceeded to a 429 envelope.
+    # Registered BEFORE the generic HTTPException handler so the
+    # RateLimitExceeded class (a subclass of werkzeug HTTPException) is
+    # matched by the more specific errorhandler.
+    try:
+        from flask_limiter.errors import RateLimitExceeded
+
+        @app.errorhandler(RateLimitExceeded)
+        def _handle_rate_limit(err: "RateLimitExceeded"):  # noqa: F821
+            logger.info(
+                "rate_limited",
+                extra={"extra_fields": {"cid": _cid(), "description": str(err.description)}},
+            )
+            return (
+                _envelope(RATE_LIMITED, f"Rate limit exceeded: {err.description}"),
+                429,
+            )
+    except ImportError:
+        # flask-limiter is listed in requirements; if it's missing at
+        # import time we skip the handler rather than crashing — the
+        # rate-limiter init would have already failed upstream.
+        pass
+
     @app.errorhandler(HTTPException)
     def _handle_http_exception(err: HTTPException):
         # Flask-raised exceptions: unknown route, disallowed method, etc.

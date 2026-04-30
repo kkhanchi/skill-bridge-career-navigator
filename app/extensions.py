@@ -27,6 +27,8 @@ import os
 from dataclasses import dataclass, field
 
 from flask import Flask, current_app
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -151,10 +153,17 @@ class Extensions:
     resources: list[LearningResource]
     categorizer: SkillCategorizerInterface
 
-    # Phase 2: SQL backend handles. Both are ``None`` on memory-backed
+    # Phase 3: SQL backend handles. Both are ``None`` on memory-backed
     # apps; handlers never touch them directly.
     engine: Engine | None = None
     session_factory: sessionmaker[Session] | None = None
+
+    # Phase 3: flask-limiter instance. Kept on Extensions so handlers
+    # can reference it via ``get_ext().limiter`` inside the auth
+    # blueprint (``@limiter.limit(...)`` is applied at handler-decoration
+    # time so it needs access to the per-app instance). ``None`` until
+    # ``init_extensions`` wires it.
+    limiter: Limiter | None = None
 
     # Diagnostic breadcrumbs — what paths/URLs were used at init.
     # `_database_url` is kept for introspection in tests only; it must
@@ -293,7 +302,12 @@ def init_extensions(app: Flask) -> None:
     Dispatches to the memory or SQL builder based on
     :func:`pick_backend`. The result is stored on
     ``app.extensions["skillbridge"]``.
+
+    Phase 3: enforce ``JWT_SECRET`` in prod and emit a dev-default
+    warning; then wire a flask-limiter bound to this app.
     """
+    _enforce_jwt_secret(app)
+
     backend = pick_backend(app.config)
 
     if backend == "memory":
@@ -307,6 +321,21 @@ def init_extensions(app: Flask) -> None:
     # leftover factory from an earlier test app.
     set_session_factory(ext.session_factory)
 
+    # Phase 3: rate limiter. Per-app instance so TestConfig tests get
+    # a fresh counter on every create_app, matching the per-test
+    # isolation pattern (R10.2). In-memory storage is fine for a
+    # single-worker deployment; multi-worker production would swap
+    # ``memory://`` for ``redis://...`` (ADR-016).
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri="memory://",
+        default_limits=[],  # per-route @limit decorators only
+        strategy="fixed-window",
+        headers_enabled=True,
+    )
+    limiter.init_app(app)
+    ext.limiter = limiter
+
     app.extensions[_EXT_KEY] = ext
 
     logger.info(
@@ -318,6 +347,31 @@ def init_extensions(app: Flask) -> None:
             "categorizer": type(ext.categorizer).__name__,
         }},
     )
+
+
+def _enforce_jwt_secret(app: Flask) -> None:
+    """Phase 3 fail-loud / warn-on-default for JWT_SECRET.
+
+    - In prod: empty ``JWT_SECRET`` aborts startup with RuntimeError.
+      Failing at create_app is better than failing at the first login
+      request three hours into a deploy.
+    - In dev with the dev-default literal in use: log a warning once.
+      The dev default is never valid for any shared deployment.
+    - In test: no action — TestConfig carries a fixed literal.
+    """
+    env = str(app.config.get("APP_ENV", "") or "").lower()
+    secret = str(app.config.get("JWT_SECRET", "") or "")
+
+    if env == "prod" and not secret:
+        raise RuntimeError("JWT_SECRET is required in production")
+
+    if env == "dev" and secret == "dev-secret-do-not-use-in-prod":
+        logger.warning(
+            "jwt_secret.using_dev_default",
+            extra={"extra_fields": {
+                "hint": "set JWT_SECRET env var for any shared deployment",
+            }},
+        )
 
 
 def get_ext(app: Flask | None = None) -> Extensions:
