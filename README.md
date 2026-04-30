@@ -145,7 +145,7 @@ See `.kiro/specs/phase-3-auth/` for full design and requirements, and ADRs [012]
 
 ---
 
-## Phase 5 — Docker, CI/CD, Deployment (current)
+## Phase 5 — Docker, CI/CD, Deployment
 
 Phase 5 takes the application from "green CI" to "a public URL." Zero runtime behaviour change — everything shipped is packaging and operations.
 
@@ -184,35 +184,40 @@ make compose-down          # teardown; add -v to wipe the postgres volume
 ### Architecture
 
 ```
-┌────────────┐     HTTPS     ┌───────────────────────────────────┐
-│  Browser   │──────────────▶│  Render (free tier, Oregon)        │
-│  curl / UI │               │  ┌─────────────────────────────┐   │
-└────────────┘               │  │  skillbridge-api container   │   │
-                             │  │  gunicorn -w 1 on $PORT      │   │
-                             │  │  image: ghcr.io/.../:latest  │   │
-                             │  └──────────────┬──────────────┘   │
-                             │                 │                   │
-                             │                 ▼                   │
-                             │  ┌─────────────────────────────┐   │
-                             │  │  skillbridge-db (managed)    │   │
-                             │  │  Postgres 16 free tier       │   │
-                             │  └─────────────────────────────┘   │
-                             └───────────────────────────────────┘
-                                           ▲
-                                           │ docker pull
-                                           │
-                              ┌────────────┴───────────┐
-                              │  ghcr.io/<owner>/<repo>│
-                              │  :latest :sha-xxx      │
-                              └────────────▲───────────┘
-                                           │ docker push
-                                           │
-                              ┌────────────┴───────────┐
-                              │  GitHub Actions        │
-                              │  ci.yml → build-and-   │
-                              │  publish.yml           │
-                              └────────────────────────┘
+┌────────────────┐                ┌───────────────────────────────────┐
+│  Streamlit UI  │                │  Render (free tier, Oregon)        │
+│  app.py via    │──── HTTPS ────▶│  ┌─────────────────────────────┐   │
+│  api_client.py │                │  │  skillbridge-api container   │   │
+└────────┬───────┘                │  │  gunicorn -w 1 on $PORT      │   │
+         │                        │  │  image: ghcr.io/.../:latest  │   │
+┌────────┴───────┐                │  └──────────────┬──────────────┘   │
+│  Browser /     │                │                 │                   │
+│  curl          │──── HTTPS ────▶│                 ▼                   │
+└────────────────┘                │  ┌─────────────────────────────┐   │
+                                  │  │  skillbridge-db (managed)    │   │
+                                  │  │  Postgres 16 free tier       │   │
+                                  │  └─────────────────────────────┘   │
+                                  └───────────────────────────────────┘
+                                              ▲
+                                              │ docker pull
+                                              │
+                                 ┌────────────┴───────────┐
+                                 │  ghcr.io/<owner>/<repo>│
+                                 │  :latest :sha-xxx      │
+                                 └────────────▲───────────┘
+                                              │ docker push
+                                              │
+                                 ┌────────────┴───────────┐
+                                 │  GitHub Actions        │
+                                 │  ci.yml → build-and-   │
+                                 │  publish.yml           │
+                                 └────────────────────────┘
 ```
+
+Phase 6 adds the Streamlit UI path (top-left). The API serves both
+browser/curl traffic and the Streamlit client equivalently — the
+client is just another HTTPS consumer of `/api/v1/*`.
+
 
 ### Cold start caveat
 
@@ -337,6 +342,58 @@ The AI engine uses Groq's free-tier Llama 3.3 70B model to:
 - All data is synthetic — no real personal information
 - API keys stored in `.env` (gitignored)
 - `.env.example` provided with placeholder values
+
+---
+
+## Phase 6 — Streamlit Integration with the Deployed API (current)
+
+Phase 6 cuts the Streamlit UI over to the Phase 5 live API. The reference UI at `app.py` no longer imports Phase 0 core modules for its data path; it talks HTTP to `https://skillbridge-api-4foe.onrender.com` via a new `api_client.py`.
+
+**What shipped in Phase 6:**
+
+- **`api_client.py`** — a single `ApiClient` class with 16 methods (one per Phase 1–3 endpoint), a 5-leaf error taxonomy (`ApiClientError`, `ApiServerError`, `ApiConnectionError`, `AuthExpiredError`, `RateLimitedError`, all sharing an `ApiError` base), reactive token refresh on 401 bounded at 3 HTTP requests per authenticated call, and lazy cold-start warmup. The client is Streamlit-agnostic — `app.py` owns `st.session_state` and passes tokens in via `set_tokens`.
+- **Auth sidebar** in `app.py` — register / login tabs, current-user display, logout button. Tokens live in `st.session_state` per-session (no cookies / localStorage by design, see ADR-020 §10).
+- **Two-mode `app.py`** controlled by `SKILL_BRIDGE_OFFLINE`. Online mode (default) talks HTTP; offline mode (`SKILL_BRIDGE_OFFLINE=1`) falls back to direct core-module imports for zero-infra laptop demos. R9 Option B.
+- **Cold-start spinner** on the first API call of a session so the ~30 s Render free-tier cold start doesn't look broken. `warmup()` retries `/health` with backoff [1, 2, 4, 8, 16] seconds; gives up after 6 attempts.
+- **Configurable API URL** via `st.secrets["API_BASE_URL"]` → `os.environ["API_BASE_URL"]` → `http://localhost:5000` ladder.
+- **`ADR-020`** — single ADR consolidating all Phase 6 decisions: hand-rolled client over codegen, reactive refresh over proactive, error taxonomy design, rerun-model session-state reattachment, logout 2 s timeout, Legacy_Shims disposition (Option B).
+- **63 new tests** covering 16 happy-path endpoint tests, 36 internals tests (error taxonomy, reactive refresh, warmup, URL ladder), 3 Hypothesis properties (P1 refresh bound, P3 URL ladder, P4 profile round-trip), 6 P2 logout idempotency tests at the handler layer. Phase 5's 274 still pass.
+
+### Run both services locally
+
+1. Start the API (from `skill-bridge/`):
+   ```
+   make compose-up
+   ```
+   This brings up Postgres 16 + the Flask API on port 5000 via docker-compose.
+
+2. Point the Streamlit app at it:
+   ```
+   export API_BASE_URL=http://localhost:5000
+   streamlit run app.py
+   ```
+
+3. Register an account in the sidebar, log in, and use the UI as normal. All state persists server-side.
+
+### Run against the deployed API
+
+1. Set `API_BASE_URL` in `.streamlit/secrets.toml` (local) or the Streamlit Cloud secrets dashboard (prod):
+   ```toml
+   API_BASE_URL = "https://skillbridge-api-4foe.onrender.com"
+   ```
+2. `streamlit run app.py`. First call triggers the cold-start spinner (~30 s); subsequent calls are fast.
+
+### Offline-only demo (no API required)
+
+```
+SKILL_BRIDGE_OFFLINE=1 streamlit run app.py
+```
+
+Falls back to the Phase 0–5 direct-core-import path. In-memory storage, no login required. Useful for reviewers running on a laptop with no infra.
+
+### Phase 6 ADR
+
+- [ADR-020: Streamlit integration with the deployed API](./decisions/ADR-020-streamlit-api-integration.md)
 
 ---
 

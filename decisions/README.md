@@ -53,3 +53,7 @@ ADR that supersedes it and note the supersession in both files.
 ## Phase 5 ADRs
 
 - [ADR-019: Phase 5 deploy architecture — Docker, GHCR, Render](./ADR-019-deploy-architecture.md)
+
+## Phase 6 ADRs
+
+- [ADR-020: Streamlit integration with the deployed API — hand-rolled client, reactive refresh, offline fallback](./ADR-020-streamlit-api-integration.md)

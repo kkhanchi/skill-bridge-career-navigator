@@ -13,3 +13,8 @@ coverage.xml
 # Dev databases (Phase 2 leftover — keep gitignored so local runs
 # don't accidentally check in committed dev state).
 *.db
+
+# Phase 6 — Streamlit integration secrets
+# Real values land in Streamlit Cloud's dashboard; local dev can
+# override via .env or export API_BASE_URL inline.
+.streamlit/secrets.toml
