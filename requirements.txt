@@ -28,3 +28,8 @@ pytest-cov>=5,<7
 pre-commit>=3.8,<5
 factory-boy>=3.3,<4
 Faker>=28,<40
+
+# Phase 6 — Streamlit integration
+# responses mocks `requests` at the adapter level; lets us stub HTTP
+# endpoints in api_client tests without touching the network.
+responses>=0.25,<1

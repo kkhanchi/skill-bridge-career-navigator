@@ -30,6 +30,8 @@ write ``st.session_state``; the caller (``app.py``) passes tokens via
 
 from __future__ import annotations
 
+import os
+import time
 from typing import Any
 
 import requests
@@ -43,6 +45,24 @@ __all__ = [
     "AuthExpiredError",
     "RateLimitedError",
 ]
+
+
+def _parse_retry_after(header: str | None) -> int | None:
+    """Parse a ``Retry-After`` header value into seconds.
+
+    HTTP allows two formats: a delta-seconds integer (``"60"``) or an
+    RFC 7231 HTTP-date. Phase 3's rate limiter emits the integer form,
+    and that's all we need to parse for the Streamlit UX. Returns
+    ``None`` on missing, empty, or unparseable input so the UI can
+    fall back to a generic rate-limit message.
+    """
+    if not header:
+        return None
+    try:
+        value = int(header.strip())
+        return value if value >= 0 else None
+    except ValueError:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +214,12 @@ class ApiClient:
                 → ``os.environ["API_BASE_URL"]`` →
                 ``"http://localhost:5000"``.
         """
-        # Stage A stores nothing; Stage B fills in construction.
-        raise NotImplementedError("ApiClient.__init__ — Stage B")
+        self._base_url = self._resolve_base_url(base_url).rstrip("/")
+        self._session = requests.Session()
+        self._access: str | None = None
+        self._refresh: str | None = None
+        self._warm = False
+        self._default_timeout = 10.0
 
     def set_tokens(self, access: str | None, refresh: str | None) -> None:
         """Replace the client's stored access / refresh token pair.
@@ -206,7 +230,8 @@ class ApiClient:
         the previous rerun, and the client instance needs to observe
         that change.
         """
-        raise NotImplementedError("ApiClient.set_tokens — Stage B")
+        self._access = access
+        self._refresh = refresh
 
     @property
     def tokens(self) -> tuple[str | None, str | None]:
@@ -217,7 +242,7 @@ class ApiClient:
         that triggered a reactive refresh) and writes the pair back
         to ``st.session_state``.
         """
-        raise NotImplementedError("ApiClient.tokens — Stage B")
+        return (self._access, self._refresh)
 
     # ---------------------------------------------------------------
     # Cold-start warmup (R4)
@@ -235,7 +260,43 @@ class ApiClient:
 
         Does NOT call :meth:`_ensure_warm` (would recurse).
         """
-        raise NotImplementedError("ApiClient.warmup — Stage B")
+        # 5 sleeps → 6 attempts total. Cumulative sleep 1+2+4+8+16 =
+        # 31 s, plus per-attempt HTTP wait of up to 5 s each; the
+        # timeout argument caps the total wall-clock so we can't run
+        # beyond the user's patience.
+        delays = [1.0, 2.0, 4.0, 8.0, 16.0]
+        start = time.monotonic()
+        for attempt in range(6):
+            try:
+                resp = self._session.get(
+                    f"{self._base_url}/health",
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    self._warm = True
+                    return
+            except requests.RequestException:
+                # Cold Render instance typically drops the connection
+                # outright for the first attempt. Treat as a retry
+                # trigger, not a terminal error.
+                pass
+            if attempt < len(delays):
+                remaining = timeout - (time.monotonic() - start)
+                if remaining <= 0:
+                    break
+                time.sleep(min(delays[attempt], remaining))
+        raise ApiConnectionError(RuntimeError("Warmup exhausted"))
+
+    def _ensure_warm(self) -> None:
+        """Run :meth:`warmup` lazily on the first public call of a session.
+
+        Early-return if ``self._warm`` is already ``True``. Called
+        from the top of :meth:`_request` so every public method
+        triggers warmup exactly once per session regardless of path.
+        """
+        if self._warm:
+            return
+        self.warmup()
 
     # ---------------------------------------------------------------
     # Auth endpoints (R2.1–R2.5)
@@ -366,7 +427,65 @@ class ApiClient:
         "at most 3 HTTP requests per authenticated call" bound (R3.5,
         property P1) is a local invariant.
         """
-        raise NotImplementedError("ApiClient._request — Stage B")
+        self._ensure_warm()
+
+        effective_timeout = timeout if timeout is not None else self._default_timeout
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if authed:
+            # A missing access token on an authed call should never
+            # reach the network. Raise AuthExpiredError immediately —
+            # that's exactly the "your session is gone, please log
+            # in" state the Streamlit layer handles.
+            if not self._access:
+                raise AuthExpiredError("No access token")
+            headers["Authorization"] = f"Bearer {self._access}"
+
+        resp = self._do_request(
+            method,
+            path,
+            headers=headers,
+            json=json,
+            params=params,
+            timeout=effective_timeout,
+        )
+
+        # Reactive_Refresh path. Only attempts on authed calls with a
+        # 401; public 401s fall through to _handle_response and raise
+        # ApiClientError (no refresh token would help). At most one
+        # refresh attempt + one retry per invocation, so total network
+        # I/O is capped at 3 requests (R3.5 / property P1).
+        if authed and resp.status_code == 401:
+            try:
+                self._do_refresh()
+            except ApiError:
+                # Refresh itself failed — tokens are stale beyond
+                # recovery. Clear and signal the UI to re-login.
+                self._clear_tokens()
+                _, message = self._parse_error_body(resp)
+                raise AuthExpiredError(message) from None
+
+            # Refresh succeeded; retry the original request exactly
+            # once with the new access token.
+            headers["Authorization"] = f"Bearer {self._access}"
+            resp = self._do_request(
+                method,
+                path,
+                headers=headers,
+                json=json,
+                params=params,
+                timeout=effective_timeout,
+            )
+            if resp.status_code == 401:
+                # Server accepted the refresh but rejected the
+                # retried request with the new token — usually means
+                # the user was deleted or the token was revoked
+                # server-side between refresh and retry. No recovery
+                # path; force re-login.
+                self._clear_tokens()
+                _, message = self._parse_error_body(resp)
+                raise AuthExpiredError(message)
+
+        return self._handle_response(resp)
 
     def _do_request(
         self,
@@ -385,7 +504,23 @@ class ApiClient:
         :class:`requests.RequestException` → :class:`ApiConnectionError`
         (R7.5) in exactly one place.
         """
-        raise NotImplementedError("ApiClient._do_request — Stage B")
+        # The trailing-slash strip in __init__ plus the leading-slash
+        # guard here means users can pass either "/health" or "health"
+        # to internal callers, and we still produce exactly one slash
+        # between base and path. R6.3.
+        normalized = path if path.startswith("/") else "/" + path
+        url = f"{self._base_url}{normalized}"
+        try:
+            return self._session.request(
+                method,
+                url,
+                headers=headers,
+                json=json,
+                params=params,
+                timeout=timeout,
+            )
+        except requests.RequestException as e:
+            raise ApiConnectionError(e) from e
 
     def _handle_response(
         self,
@@ -404,7 +539,40 @@ class ApiClient:
         - 5xx: raises :class:`ApiServerError(status, body)` truncated
           to 500 chars.
         """
-        raise NotImplementedError("ApiClient._handle_response — Stage B")
+        status = resp.status_code
+        if 200 <= status < 300:
+            # 204 No Content is the Phase 1/3 convention for DELETE
+            # and logout. resp.content is b"" for those responses and
+            # resp.json() would raise. Handle both "explicit 204" and
+            # "2xx with empty body" as None.
+            if status == 204 or not resp.content:
+                return None
+            # A 2xx with a non-JSON body shouldn't happen against our
+            # API, but if a proxy intercepts (e.g. Cloudflare HTML
+            # error page served with 200), resp.json() raises. Let it
+            # propagate — the caller wraps in _request where the
+            # requests exception already became ApiConnectionError,
+            # and a ValueError here indicates a bug worth surfacing.
+            parsed = resp.json()
+            # Phase 1 API always returns dict-shaped bodies. Narrow
+            # the mypy type for callers that declare -> dict[str, Any].
+            return parsed if isinstance(parsed, dict) else {"data": parsed}
+
+        if status == 429:
+            retry_after = _parse_retry_after(resp.headers.get("Retry-After"))
+            _, message = self._parse_error_body(resp)
+            raise RateLimitedError(message, retry_after)
+
+        if 400 <= status < 500:
+            code, message = self._parse_error_body(resp)
+            # 401 reaches here only on public-endpoint calls (authed
+            # path handles 401 in _request before we ever call
+            # _handle_response). Treating a public 401 as a plain
+            # 4xx is intentional: no refresh token would help.
+            raise ApiClientError(status, code, message)
+
+        # 5xx.
+        raise ApiServerError(status, resp.text[:500])
 
     def _parse_error_body(
         self,
@@ -418,16 +586,23 @@ class ApiClient:
         Falls back to ``("UNKNOWN", (resp.text or f"HTTP {status}")
         [:200])``. Never raises.
         """
-        raise NotImplementedError("ApiClient._parse_error_body — Stage B")
-
-    def _ensure_warm(self) -> None:
-        """Run :meth:`warmup` lazily on the first public call of a session.
-
-        Early-return if ``self._warm`` is already ``True``. Called
-        from the top of :meth:`_request` so every public method
-        triggers warmup exactly once per session regardless of path.
-        """
-        raise NotImplementedError("ApiClient._ensure_warm — Stage B")
+        try:
+            body = resp.json()
+            if not isinstance(body, dict):
+                raise ValueError("non-dict body")
+            err = body.get("error") or {}
+            if not isinstance(err, dict):
+                raise ValueError("non-dict error field")
+            code = err.get("code") or "UNKNOWN"
+            message = (
+                err.get("message")
+                or resp.text[:200]
+                or f"HTTP {resp.status_code}"
+            )
+            return (str(code), str(message))
+        except (ValueError, AttributeError):
+            fallback = (resp.text or f"HTTP {resp.status_code}")[:200]
+            return ("UNKNOWN", fallback)
 
     def _do_refresh(self) -> None:
         """Issue ``POST /api/v1/auth/refresh`` and update stored tokens.
@@ -441,7 +616,34 @@ class ApiClient:
         Raises :class:`ApiError` subclasses on failure; the caller
         catches that and raises :class:`AuthExpiredError` per R3.3.
         """
-        raise NotImplementedError("ApiClient._do_refresh — Stage B")
+        if not self._refresh:
+            raise AuthExpiredError("No refresh token")
+
+        resp = self._do_request(
+            "POST",
+            "/api/v1/auth/refresh",
+            headers={"Content-Type": "application/json"},
+            json={"refresh": self._refresh},
+            params=None,
+            timeout=self._default_timeout,
+        )
+        # _handle_response raises on non-2xx. 401 from the refresh
+        # endpoint itself becomes ApiClientError at that layer, which
+        # _request then translates to AuthExpiredError.
+        body = self._handle_response(resp)
+
+        # Phase 3's refresh endpoint rotates BOTH tokens in every
+        # response (ADR-014): old refresh is invalidated, new access
+        # + refresh pair returned. Response shape matches login:
+        # {"access": "...", "refresh": "...", "user": {...}}.
+        if not isinstance(body, dict) or "access" not in body or "refresh" not in body:
+            raise ApiClientError(
+                200,
+                "UNEXPECTED_SHAPE",
+                "Refresh response missing access/refresh tokens",
+            )
+        self._access = str(body["access"])
+        self._refresh = str(body["refresh"])
 
     def _clear_tokens(self) -> None:
         """Set both stored tokens to ``None``.
@@ -451,7 +653,8 @@ class ApiClient:
         after this runs; the UI then mirrors the clear into
         ``st.session_state``.
         """
-        raise NotImplementedError("ApiClient._clear_tokens — Stage B")
+        self._access = None
+        self._refresh = None
 
     @staticmethod
     def _resolve_base_url(explicit: str | None) -> str:
@@ -467,4 +670,24 @@ class ApiClient:
         ``API_BASE_URL`` key inside ``st.secrets`` all fall through to
         the env-var lookup.
         """
-        raise NotImplementedError("ApiClient._resolve_base_url — Stage B")
+        if explicit:
+            return explicit
+
+        # Streamlit might not be installed (shouldn't happen given
+        # requirements.txt) or we might be running outside a Streamlit
+        # runtime (pytest, CLI). Any failure here falls through to env
+        # vars — the caller doesn't care why streamlit was unavailable.
+        try:
+            import streamlit as st
+
+            secret = st.secrets.get("API_BASE_URL")
+            if secret:
+                return str(secret)
+        except Exception:
+            pass
+
+        env = os.environ.get("API_BASE_URL")
+        if env:
+            return env
+
+        return "http://localhost:5000"
