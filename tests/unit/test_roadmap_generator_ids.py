@@ -63,16 +63,21 @@ def test_generate_roadmap_empty_gap_returns_empty_phases():
 
 
 def test_mark_completed_by_id_flips_target_only():
-    r1 = LearningResource(name="A", skill="Python", resource_type="c",
-                          estimated_hours=1, url="u", id="id-1")
-    r2 = LearningResource(name="B", skill="SQL", resource_type="c",
-                          estimated_hours=1, url="u", id="id-2")
-    r3 = LearningResource(name="C", skill="Docker", resource_type="c",
-                          estimated_hours=1, url="u", id="id-3")
-    roadmap = Roadmap(phases=[
-        RoadmapPhase(label="Phase 1", resources=[r1, r2]),
-        RoadmapPhase(label="Phase 2", resources=[r3]),
-    ])
+    r1 = LearningResource(
+        name="A", skill="Python", resource_type="c", estimated_hours=1, url="u", id="id-1"
+    )
+    r2 = LearningResource(
+        name="B", skill="SQL", resource_type="c", estimated_hours=1, url="u", id="id-2"
+    )
+    r3 = LearningResource(
+        name="C", skill="Docker", resource_type="c", estimated_hours=1, url="u", id="id-3"
+    )
+    roadmap = Roadmap(
+        phases=[
+            RoadmapPhase(label="Phase 1", resources=[r1, r2]),
+            RoadmapPhase(label="Phase 2", resources=[r3]),
+        ]
+    )
 
     updated = mark_completed_by_id(roadmap, "id-2")
 
@@ -85,12 +90,23 @@ def test_mark_completed_by_id_flips_target_only():
 
 
 def test_mark_completed_by_id_raises_for_unknown_id():
-    roadmap = Roadmap(phases=[RoadmapPhase(
-        label="Phase 1",
-        resources=[LearningResource(
-            name="A", skill="Python", resource_type="c",
-            estimated_hours=1, url="u", id="id-1")],
-    )])
+    roadmap = Roadmap(
+        phases=[
+            RoadmapPhase(
+                label="Phase 1",
+                resources=[
+                    LearningResource(
+                        name="A",
+                        skill="Python",
+                        resource_type="c",
+                        estimated_hours=1,
+                        url="u",
+                        id="id-1",
+                    )
+                ],
+            )
+        ]
+    )
 
     with pytest.raises(KeyError):
         mark_completed_by_id(roadmap, "missing-id")
@@ -100,10 +116,12 @@ def test_mark_completed_preserves_ids_for_streamlit_flow():
     # The Streamlit UI still uses mark_completed(roadmap, name). The
     # rebuilt Roadmap must keep the original ids so any repository
     # index built before the rebuild remains valid.
-    r1 = LearningResource(name="A", skill="Python", resource_type="c",
-                          estimated_hours=1, url="u", id="keep-1")
-    r2 = LearningResource(name="B", skill="SQL", resource_type="c",
-                          estimated_hours=1, url="u", id="keep-2")
+    r1 = LearningResource(
+        name="A", skill="Python", resource_type="c", estimated_hours=1, url="u", id="keep-1"
+    )
+    r2 = LearningResource(
+        name="B", skill="SQL", resource_type="c", estimated_hours=1, url="u", id="keep-2"
+    )
     roadmap = Roadmap(phases=[RoadmapPhase(label="Phase 1", resources=[r1, r2])])
 
     updated = mark_completed(roadmap, "A")

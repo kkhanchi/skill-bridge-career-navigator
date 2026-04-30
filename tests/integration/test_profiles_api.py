@@ -16,7 +16,6 @@ Requirement reference: R1.1–R1.7, R6.1, R6.2, R6.3.
 
 from __future__ import annotations
 
-
 VALID_PAYLOAD = {
     "name": "Test User",
     "skills": ["Python", "SQL"],

@@ -22,7 +22,6 @@ from app.db.models import JobORM, ProfileORM
 from app.repositories.job_repo import InMemoryJobRepository
 from scripts.seed_db import seed_db
 
-
 _PKG_ROOT = Path(__file__).resolve().parents[2]
 _JOBS_PATH = str(_PKG_ROOT / "data" / "jobs.json")
 
@@ -85,14 +84,19 @@ def test_seed_db_is_idempotent_across_runs(sql_engine, jobs_file):
     assert len(rows_after_first) == len(rows_after_second)
     # Both runs report touching the same number of jobs.
     assert first_count == second_count
+
     # Tuple of (id, title, description, required, preferred, level)
     # is invariant across runs.
     def _tuple(r: JobORM) -> tuple:
         return (
-            r.id, r.title, r.description,
-            tuple(r.required_skills), tuple(r.preferred_skills),
+            r.id,
+            r.title,
+            r.description,
+            tuple(r.required_skills),
+            tuple(r.preferred_skills),
             r.experience_level,
         )
+
     assert [_tuple(r) for r in rows_after_first] == [_tuple(r) for r in rows_after_second]
 
 
@@ -149,22 +153,27 @@ def test_seed_db_rolls_back_on_failure(sql_engine, tmp_path, monkeypatch):
     # Simulate a crash mid-loop by monkeypatching session.add on the
     # second call.
     jobs_path = tmp_path / "jobs.json"
-    jobs_path.write_text(json.dumps([
-        {
-            "title": "A",
-            "description": "d",
-            "required_skills": [],
-            "preferred_skills": [],
-            "experience_level": "Mid",
-        },
-        {
-            "title": "B",
-            "description": "d",
-            "required_skills": [],
-            "preferred_skills": [],
-            "experience_level": "Mid",
-        },
-    ]), encoding="utf-8")
+    jobs_path.write_text(
+        json.dumps(
+            [
+                {
+                    "title": "A",
+                    "description": "d",
+                    "required_skills": [],
+                    "preferred_skills": [],
+                    "experience_level": "Mid",
+                },
+                {
+                    "title": "B",
+                    "description": "d",
+                    "required_skills": [],
+                    "preferred_skills": [],
+                    "experience_level": "Mid",
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     from sqlalchemy.orm import Session as _Session
 

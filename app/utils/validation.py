@@ -13,7 +13,8 @@ Design reference: `.kiro/specs/phase-1-rest-api/design.md` §Validation.
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from flask import request
 from pydantic import BaseModel, ValidationError

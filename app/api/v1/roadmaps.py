@@ -32,7 +32,8 @@ Requirement reference: R5.1–R5.5, R6.1, R6.3, R6.5, R9.1, R13.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from flask import Blueprint, jsonify
@@ -56,11 +57,10 @@ from app.utils.errors import (
 )
 from app.utils.validation import validate_body
 
-
 bp = Blueprint("roadmaps", __name__)
 
 
-def _serialize(record: RoadmapRecord) -> dict:
+def _serialize(record: RoadmapRecord) -> dict[str, Any]:
     return RoadmapResponse(
         id=record.id,
         analysis_id=record.analysis_id,
@@ -102,16 +102,14 @@ def _build_resource_index(record_phases) -> dict[str, tuple[int, int]]:
 def create_roadmap_handler(*, body: RoadmapCreate, current_user: UserRecord):
     ext = get_ext()
 
-    analysis_record = ext.analysis_repo.get_for_user(
-        body.analysis_id, current_user.id
-    )
+    analysis_record = ext.analysis_repo.get_for_user(body.analysis_id, current_user.id)
     if analysis_record is None:
         raise ApiError(ANALYSIS_NOT_FOUND, "Analysis not found", status=404)
 
     roadmap = generate_roadmap(analysis_record.gap, ext.resources)
     resource_index = _build_resource_index(roadmap.phases)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     record = RoadmapRecord(
         id=uuid4().hex,
         analysis_id=body.analysis_id,

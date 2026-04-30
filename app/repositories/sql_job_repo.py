@@ -76,7 +76,8 @@ class SqlAlchemyJobRepository:
         skill_clean = (skill or "").strip().lower()
         if skill_clean:
             rows = [
-                r for r in rows
+                r
+                for r in rows
                 if skill_clean in {s.lower() for s in (r.required_skills + r.preferred_skills)}
             ]
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 from app.core.models import JobPosting, UserProfile
 from app.core.roadmap_generator import recalculate_match
 
-
 VALID_PROFILE = {
     "name": "Test User",
     "skills": ["Python"],
@@ -114,7 +113,9 @@ def test_patch_resource_can_flip_back_to_false(authenticated_client):
     res_id = first["id"]
 
     # Flip to true, then back to false.
-    authenticated_client.patch(f"/api/v1/roadmaps/{rid}/resources/{res_id}", json={"completed": True})
+    authenticated_client.patch(
+        f"/api/v1/roadmaps/{rid}/resources/{res_id}", json={"completed": True}
+    )
     response = authenticated_client.patch(
         f"/api/v1/roadmaps/{rid}/resources/{res_id}",
         json={"completed": False},
@@ -199,24 +200,27 @@ def test_completion_monotonicity_sanity(authenticated_client):
     # Helper: build a Roadmap domain object from the response body.
     def to_domain_roadmap(body):
         from app.core.models import LearningResource, Roadmap, RoadmapPhase
-        return Roadmap(phases=[
-            RoadmapPhase(
-                label=phase["label"],
-                resources=[
-                    LearningResource(
-                        name=res["name"],
-                        skill=res["skill"],
-                        resource_type=res["resource_type"],
-                        estimated_hours=res["estimated_hours"],
-                        url=res["url"],
-                        completed=res["completed"],
-                        id=res["id"],
-                    )
-                    for res in phase["resources"]
-                ],
-            )
-            for phase in body["phases"]
-        ])
+
+        return Roadmap(
+            phases=[
+                RoadmapPhase(
+                    label=phase["label"],
+                    resources=[
+                        LearningResource(
+                            name=res["name"],
+                            skill=res["skill"],
+                            resource_type=res["resource_type"],
+                            estimated_hours=res["estimated_hours"],
+                            url=res["url"],
+                            completed=res["completed"],
+                            id=res["id"],
+                        )
+                        for res in phase["resources"]
+                    ],
+                )
+                for phase in body["phases"]
+            ]
+        )
 
     before_match = recalculate_match(profile, job, to_domain_roadmap(roadmap))
 

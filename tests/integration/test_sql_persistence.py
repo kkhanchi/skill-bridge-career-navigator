@@ -24,10 +24,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.core.models import JobPosting
 from app.db.models import JobORM, RoadmapORM
 from app.db.session import get_db_session  # noqa: F401  - for clarity
-
+from tests.factories import ProfileFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,6 +42,23 @@ VALID_PROFILE = {
 }
 
 
+def _profile_payload_from_factory() -> dict:
+    """Build a profile POST payload using ProfileFactory (Phase 4 R7.5).
+
+    Factory produces a detached ORM instance; we project it down to
+    the Pydantic create-body shape. Proves the factory integrates
+    with the real HTTP test lifecycle, not just the round-trip test.
+    """
+    profile = ProfileFactory.build()
+    return {
+        "name": profile.name,
+        "skills": profile.skills,
+        "experience_years": profile.experience_years,
+        "education": profile.education,
+        "target_role": profile.target_role,
+    }
+
+
 def _seed_job(sql_app, **overrides) -> str:
     """Insert a JobORM row directly through the SQL repo + session
     hooks. Returns the row's slug id.
@@ -51,12 +67,8 @@ def _seed_job(sql_app, **overrides) -> str:
         "id": overrides.get("id", "backend-developer"),
         "title": overrides.get("title", "Backend Developer"),
         "description": overrides.get("description", "Build APIs"),
-        "required_skills": overrides.get(
-            "required_skills", ["Python", "SQL", "REST APIs", "Git"]
-        ),
-        "preferred_skills": overrides.get(
-            "preferred_skills", ["Docker", "AWS"]
-        ),
+        "required_skills": overrides.get("required_skills", ["Python", "SQL", "REST APIs", "Git"]),
+        "preferred_skills": overrides.get("preferred_skills", ["Docker", "AWS"]),
         "experience_level": overrides.get("experience_level", "Mid"),
     }
     # Use a short-lived session bound to the per-test engine; not inside
@@ -74,8 +86,13 @@ def _seed_job(sql_app, **overrides) -> str:
 
 
 def test_profile_crud_round_trip_on_sql_backend(authenticated_sql_client):
+    # Use a factory-built payload instead of the hand-rolled VALID_PROFILE
+    # dict — Phase 4 R7.5 proof that factories slot into the real HTTP
+    # test lifecycle, not just the round-trip fixture.
+    payload = _profile_payload_from_factory()
+
     # POST -> 201 and id is a uuid4 hex.
-    created = authenticated_sql_client.post("/api/v1/profiles", json=VALID_PROFILE)
+    created = authenticated_sql_client.post("/api/v1/profiles", json=payload)
     assert created.status_code == 201
     body = created.get_json()
     profile_id = body["id"]
@@ -256,7 +273,8 @@ def test_patch_roadmap_resource_not_found_distinguished_from_missing_roadmap(
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
     roadmap = authenticated_sql_client.post(
-        "/api/v1/roadmaps", json={"analysis_id": analysis["id"]},
+        "/api/v1/roadmaps",
+        json={"analysis_id": analysis["id"]},
     ).get_json()
 
     response = authenticated_sql_client.patch(
@@ -277,14 +295,16 @@ def _seed_many_jobs(sql_app, count: int) -> None:
     ext = sql_app.extensions["skillbridge"]
     with ext.session_factory() as session:
         for i in range(count):
-            session.add(JobORM(
-                id=f"j-{i:03d}",
-                title=f"Role {i}",
-                description=f"desc {i}",
-                required_skills=["Python"],
-                preferred_skills=[],
-                experience_level="Mid",
-            ))
+            session.add(
+                JobORM(
+                    id=f"j-{i:03d}",
+                    title=f"Role {i}",
+                    description=f"desc {i}",
+                    required_skills=["Python"],
+                    preferred_skills=[],
+                    experience_level="Mid",
+                )
+            )
         session.commit()
 
 
@@ -305,8 +325,8 @@ def test_pagination_partitions_filtered_set(sql_client, sql_app):
 
     assert len(seen_ids) == 30
     assert len(set(seen_ids)) == 30  # no duplicates (R8.4)
-    assert seen_totals == {30}       # total invariant across pages
-    assert pages_seen == {3}         # pages == ceil(30/10) invariant
+    assert seen_totals == {30}  # total invariant across pages
+    assert pages_seen == {3}  # pages == ceil(30/10) invariant
 
     # Ordering is deterministic (R8.3): ORDER BY id ASC.
     assert seen_ids == sorted(seen_ids)

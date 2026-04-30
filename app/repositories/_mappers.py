@@ -20,6 +20,7 @@ Requirement reference: R2.2, R7.4.
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import Any
 
 from app.core.models import (
     CategorizationResult,
@@ -46,7 +47,6 @@ from app.repositories.base import (
     RoadmapRecord,
     UserRecord,
 )
-
 
 # ---------------------------------------------------------------------------
 # ProfileRecord <-> ProfileORM
@@ -179,7 +179,7 @@ def _build_resource_index(roadmap: Roadmap) -> dict[str, tuple[int, int]]:
     return index
 
 
-def _learning_resource_from_dict(data: dict) -> LearningResource:
+def _learning_resource_from_dict(data: dict[str, Any]) -> LearningResource:
     return LearningResource(
         name=data["name"],
         skill=data["skill"],
@@ -213,7 +213,7 @@ def roadmap_record_from_row(row: RoadmapORM) -> RoadmapRecord:
     )
 
 
-def _learning_resource_to_dict(res: LearningResource) -> dict:
+def _learning_resource_to_dict(res: LearningResource) -> dict[str, Any]:
     return {
         "id": res.id,
         "name": res.name,
@@ -229,9 +229,7 @@ def roadmap_row_from_record(rec: RoadmapRecord) -> RoadmapORM:
     phases_json = [
         {
             "label": phase.label,
-            "resources": [
-                _learning_resource_to_dict(res) for res in phase.resources
-            ],
+            "resources": [_learning_resource_to_dict(res) for res in phase.resources],
         }
         for phase in rec.roadmap.phases
     ]

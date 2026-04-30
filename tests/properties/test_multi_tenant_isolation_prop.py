@@ -21,7 +21,6 @@ from hypothesis.strategies import booleans, integers, lists, sampled_from, text
 from app import create_app
 from app.auth.tokens import encode_access_token
 
-
 _SKILLS = ["Python", "SQL", "Docker", "AWS", "REST APIs", "Git"]
 
 
@@ -144,9 +143,7 @@ class MultiTenantIsolationMachine(RuleBasedStateMachine):
     def b_tries_to_patch_a(self, pid, flip):
         # Cross-tenant PATCH must be rejected as NOT_FOUND — ownership
         # check runs before any mutation.
-        response = self.client_b.patch(
-            f"/api/v1/profiles/{pid}", json={"name": f"hack-{flip}"}
-        )
+        response = self.client_b.patch(f"/api/v1/profiles/{pid}", json={"name": f"hack-{flip}"})
         assert response.status_code == 404
 
     @rule(pid=profiles_a)

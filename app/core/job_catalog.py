@@ -10,7 +10,13 @@ from .models import JobPosting
 
 logger = logging.getLogger(__name__)
 
-_REQUIRED_FIELDS = {"title", "description", "required_skills", "preferred_skills", "experience_level"}
+_REQUIRED_FIELDS = {
+    "title",
+    "description",
+    "required_skills",
+    "preferred_skills",
+    "experience_level",
+}
 
 
 def load_jobs(path: str = "data/jobs.json") -> list[JobPosting]:
@@ -22,7 +28,7 @@ def load_jobs(path: str = "data/jobs.json") -> list[JobPosting]:
     if not Path(path).exists():
         raise FileNotFoundError(f"Job catalog file not found: {path}")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         raw = json.load(f)
 
     jobs: list[JobPosting] = []

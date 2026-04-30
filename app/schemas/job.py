@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import PageMeta, STRICT_MODEL_CONFIG
+from app.schemas.common import STRICT_MODEL_CONFIG, PageMeta
 
 
 class JobListQuery(BaseModel):

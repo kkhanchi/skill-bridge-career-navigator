@@ -21,7 +21,7 @@ Requirement reference: R5.2, R5.3, R5.4, R13.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
@@ -31,7 +31,6 @@ from flask import Blueprint, jsonify
 from app import create_app
 from app.auth.decorator import require_auth
 from app.auth.tokens import encode_access_token, encode_refresh_token
-
 
 # ---------------------------------------------------------------------------
 # Fixture: app with one decorated route that echoes current_user
@@ -76,9 +75,7 @@ def registered_user(decorated_app):
 # ---------------------------------------------------------------------------
 
 
-def test_valid_access_token_injects_current_user(
-    decorated_app, decorated_client, registered_user
-):
+def test_valid_access_token_injects_current_user(decorated_app, decorated_client, registered_user):
     with decorated_app.app_context():
         token = encode_access_token(registered_user.id)
 
@@ -130,24 +127,18 @@ def test_empty_bearer_token_is_auth_required(decorated_client):
 # ---------------------------------------------------------------------------
 
 
-def test_expired_access_token_is_token_expired(
-    decorated_app, decorated_client, registered_user
-):
+def test_expired_access_token_is_token_expired(decorated_app, decorated_client, registered_user):
     with decorated_app.app_context():
-        in_the_past = datetime.now(timezone.utc) - timedelta(hours=2)
+        in_the_past = datetime.now(UTC) - timedelta(hours=2)
         token = encode_access_token(registered_user.id, now=in_the_past)
 
-    response = decorated_client.get(
-        "/probe", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = decorated_client.get("/probe", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_EXPIRED"
 
 
 def test_malformed_token_is_token_invalid(decorated_client):
-    response = decorated_client.get(
-        "/probe", headers={"Authorization": "Bearer not.a.jwt"}
-    )
+    response = decorated_client.get("/probe", headers={"Authorization": "Bearer not.a.jwt"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
@@ -158,9 +149,7 @@ def test_refresh_token_presented_as_access_is_token_invalid(
     with decorated_app.app_context():
         token, _, _ = encode_refresh_token(registered_user.id)
 
-    response = decorated_client.get(
-        "/probe", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = decorated_client.get("/probe", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
@@ -175,9 +164,7 @@ def test_wrong_secret_token_is_token_invalid(decorated_client):
         "type": "access",
     }
     forged = jwt.encode(claims, "some-other-secret", algorithm="HS256")
-    response = decorated_client.get(
-        "/probe", headers={"Authorization": f"Bearer {forged}"}
-    )
+    response = decorated_client.get("/probe", headers={"Authorization": f"Bearer {forged}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
@@ -187,9 +174,7 @@ def test_token_for_unknown_user_is_token_invalid(decorated_app, decorated_client
     with decorated_app.app_context():
         token = encode_access_token(uuid4().hex)
 
-    response = decorated_client.get(
-        "/probe", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = decorated_client.get("/probe", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 

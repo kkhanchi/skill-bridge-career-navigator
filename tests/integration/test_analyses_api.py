@@ -5,7 +5,6 @@ Requirement reference: R4.1–R4.6, R10.3.
 
 from __future__ import annotations
 
-
 VALID_PROFILE = {
     "name": "Test User",
     "skills": ["Python", "SQL"],
@@ -40,8 +39,13 @@ def test_post_creates_analysis_with_gap_and_categorization(authenticated_client)
     assert body["job_id"] == "backend-developer"
     # Gap shape is complete.
     gap = body["gap"]
-    for key in ("matched_required", "missing_required",
-                "matched_preferred", "missing_preferred", "match_percentage"):
+    for key in (
+        "matched_required",
+        "missing_required",
+        "matched_preferred",
+        "missing_preferred",
+        "match_percentage",
+    ):
         assert key in gap
     assert 0 <= gap["match_percentage"] <= 100
     # Categorization shape is complete.

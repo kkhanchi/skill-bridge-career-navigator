@@ -17,7 +17,6 @@ Requirement reference: R13.2, R13.3, R7.4.
 
 from __future__ import annotations
 
-
 _PASSWORD = "correct horse battery staple"
 
 

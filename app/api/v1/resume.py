@@ -17,7 +17,6 @@ from app.extensions import get_ext
 from app.schemas.resume import ResumeParseRequest, ResumeParseResponse
 from app.utils.validation import validate_body
 
-
 bp = Blueprint("resume", __name__)
 
 

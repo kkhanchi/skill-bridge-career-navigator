@@ -20,8 +20,10 @@ Requirement reference: R1, R2, R3, R4, R5, R13.2.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from typing import Any, TypeVar
 
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, jsonify
 
 from app.auth.decorator import require_auth
 from app.auth.tokens import AuthError, decode_token, encode_access_token, encode_refresh_token
@@ -38,7 +40,6 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.utils.errors import (
-    AUTH_REQUIRED,
     EMAIL_TAKEN,
     INVALID_CREDENTIALS,
     TOKEN_INVALID,
@@ -49,6 +50,8 @@ from app.utils.validation import validate_body
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("auth", __name__)
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 # ---------------------------------------------------------------------------
@@ -62,14 +65,14 @@ bp = Blueprint("auth", __name__)
 # dynamically — same observable behaviour, just indirected.
 
 
-def _with_limit(limit_str: str):
+def _with_limit(limit_str: str) -> Callable[[F], F]:
     """Return a decorator that applies ``limiter.limit(limit_str)`` at request time."""
 
-    def decorator(fn):
+    def decorator(fn: F) -> F:
         from functools import wraps
 
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             limiter = get_ext().limiter
             if limiter is None:
                 # No limiter wired — behave as if the limit didn't exist.
@@ -78,7 +81,7 @@ def _with_limit(limit_str: str):
             limited = limiter.limit(limit_str)(fn)
             return limited(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -88,7 +91,7 @@ def _with_limit(limit_str: str):
 # ---------------------------------------------------------------------------
 
 
-def _serialize_user(user: UserRecord) -> dict:
+def _serialize_user(user: UserRecord) -> dict[str, Any]:
     return UserResponse(
         id=user.id,
         email=user.email,
@@ -113,7 +116,9 @@ def _issue_tokens(user: UserRecord) -> tuple[str, str]:
     access = encode_access_token(user.id)
     refresh, jti, expires_at = encode_refresh_token(user.id)
     ext.refresh_token_repo.create(
-        user_id=user.id, jti=jti, expires_at=expires_at,
+        user_id=user.id,
+        jti=jti,
+        expires_at=expires_at,
     )
     return access, refresh
 
@@ -173,14 +178,10 @@ def login_handler(*, body: LoginRequest):
         # the response timing matches a real failed-password path.
         # The return value is discarded — we already know the outcome.
         ext.hasher.verify(ext.hasher.dummy_hash, body.password)
-        raise ApiError(
-            INVALID_CREDENTIALS, "Invalid email or password", status=401
-        )
+        raise ApiError(INVALID_CREDENTIALS, "Invalid email or password", status=401)
 
     if not ext.hasher.verify(user.password_hash, body.password):
-        raise ApiError(
-            INVALID_CREDENTIALS, "Invalid email or password", status=401
-        )
+        raise ApiError(INVALID_CREDENTIALS, "Invalid email or password", status=401)
 
     access, refresh = _issue_tokens(user)
     response = TokenPairResponse(

@@ -21,7 +21,7 @@ Hand-review notes (against autogenerate):
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -30,9 +30,9 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "0001_initial_schema"
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # Portable JSON type used by every JSON-bearing column in this schema.
@@ -72,9 +72,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_jobs_title", "jobs", ["title"], unique=False)
-    op.create_index(
-        "ix_jobs_experience_level", "jobs", ["experience_level"], unique=False
-    )
+    op.create_index("ix_jobs_experience_level", "jobs", ["experience_level"], unique=False)
 
     op.create_table(
         "profiles",
@@ -97,9 +95,7 @@ def upgrade() -> None:
             server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_profiles_user_id", "profiles", ["user_id"], unique=False)
@@ -117,20 +113,12 @@ def upgrade() -> None:
             server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["profile_id"], ["profiles.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["job_id"], ["jobs.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["profile_id"], ["profiles.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_analyses_profile_id", "analyses", ["profile_id"], unique=False
-    )
+    op.create_index("ix_analyses_profile_id", "analyses", ["profile_id"], unique=False)
     op.create_index("ix_analyses_job_id", "analyses", ["job_id"], unique=False)
 
     op.create_table(
@@ -150,14 +138,10 @@ def upgrade() -> None:
             server_default=sa.text("(CURRENT_TIMESTAMP)"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["analysis_id"], ["analyses.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["analysis_id"], ["analyses.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_roadmaps_analysis_id", "roadmaps", ["analysis_id"], unique=False
-    )
+    op.create_index("ix_roadmaps_analysis_id", "roadmaps", ["analysis_id"], unique=False)
 
 
 def downgrade() -> None:

@@ -19,7 +19,7 @@ Requirement reference: R12.5, R12.6.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.repositories.base import UserRecord
@@ -63,7 +63,7 @@ class InMemoryUserRepository:
             id=uuid4().hex,
             email=normalized,
             password_hash=password_hash,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         with self._lock:
             self._by_id[record.id] = record

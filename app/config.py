@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-
 # Paths are resolved relative to the ``skill-bridge/`` package root (two
 # levels up from this file: ``skill-bridge/app/config.py``). This keeps the
 # configuration stable regardless of where the Flask process is launched
@@ -60,14 +59,14 @@ class BaseConfig:
     # TTLs are deliberately small vs large: access tokens are short-lived
     # and stateless; refresh tokens are 14 days and stateful (stored in
     # refresh_tokens table) so they can be revoked.
-    ACCESS_TTL_SECONDS: int = 900            # 15 minutes
-    REFRESH_TTL_SECONDS: int = 1_209_600     # 14 days
+    ACCESS_TTL_SECONDS: int = 900  # 15 minutes
+    REFRESH_TTL_SECONDS: int = 1_209_600  # 14 days
 
     # argon2id cost parameters — see OWASP guidance. DevConfig/ProdConfig
     # use these production defaults; TestConfig weakens them by two orders
     # of magnitude so the test suite doesn't block on hashing.
     ARGON2_TIME_COST: int = 2
-    ARGON2_MEMORY_COST: int = 65536           # KiB (64 MiB)
+    ARGON2_MEMORY_COST: int = 65536  # KiB (64 MiB)
     ARGON2_PARALLELISM: int = 4
 
     # Comma-separated origin allowlist. Empty string means "no CORS init"
@@ -124,7 +123,7 @@ class TestConfig(BaseConfig):
     # Phase 3:
     JWT_SECRET = "test-secret-literal"
     ARGON2_TIME_COST = 1
-    ARGON2_MEMORY_COST = 8       # KiB — deliberately weak for test speed
+    ARGON2_MEMORY_COST = 8  # KiB — deliberately weak for test speed
     ARGON2_PARALLELISM = 1
     CORS_ORIGINS = ""
 

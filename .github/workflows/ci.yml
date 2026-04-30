@@ -1,0 +1,58 @@
+name: CI
+
+# Triggers: every push to any branch, and every PR targeting main.
+# Intentionally broad on push so feature branches get CI feedback
+# before they reach a PR.
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same ref when a new push lands.
+# Keeps the Actions queue clean on branches with rapid pushes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Lint / Typecheck / Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # Cache pip downloads keyed on the hash of requirements.txt.
+          # Dependency-unchanged runs hit the cache and install in ~3s.
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Ruff lint
+        run: ruff check app/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check app/ tests/
+
+      - name: mypy
+        run: mypy app/
+
+      - name: Pytest with coverage
+        run: pytest tests/
+
+      - name: Upload coverage.xml
+        # Always upload — even when the coverage floor failed — so a
+        # dev can inspect what's missing from the run that failed.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn

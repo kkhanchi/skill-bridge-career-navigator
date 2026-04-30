@@ -24,13 +24,12 @@ Requirement reference: R8.1, R8.2, R8.3, R8.6, R8.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 import jwt
 from flask import current_app
-
 
 _ACCESS = "access"
 _REFRESH = "refresh"
@@ -65,7 +64,7 @@ class AuthError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def _now_utc(now: Optional[datetime]) -> datetime:
+def _now_utc(now: datetime | None) -> datetime:
     """Resolve the effective "now" timestamp.
 
     Tests pass a frozen datetime to exercise expiry boundaries
@@ -73,7 +72,7 @@ def _now_utc(now: Optional[datetime]) -> datetime:
     real wall clock. We always work in UTC — mixing naive and aware
     datetimes silently breaks `exp` arithmetic.
     """
-    return now if now is not None else datetime.now(timezone.utc)
+    return now if now is not None else datetime.now(UTC)
 
 
 def _secret() -> str:
@@ -84,7 +83,8 @@ def _secret() -> str:
     code on prod. In tests and dev the config provides a literal
     default, so this read is safe at request time.
     """
-    return current_app.config["JWT_SECRET"]
+    secret: str = current_app.config["JWT_SECRET"]
+    return secret
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def _secret() -> str:
 def encode_access_token(
     user_id: str,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> str:
     """Return an HS256 JWT with `type="access"` and a 15-minute expiry.
 
@@ -120,7 +120,7 @@ def encode_access_token(
 def encode_refresh_token(
     user_id: str,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> tuple[str, str, datetime]:
     """Return `(token, jti, expires_at)` for a refresh JWT.
 
@@ -151,7 +151,7 @@ def encode_refresh_token(
 # ---------------------------------------------------------------------------
 
 
-def decode_token(token: str, *, expected_type: str) -> dict:
+def decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
     """Decode and verify a JWT, asserting `type == expected_type`.
 
     Success path returns the full claims dict with at minimum
@@ -195,13 +195,13 @@ def decode_token(token: str, *, expected_type: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _timedelta_seconds(seconds: int):
+def _timedelta_seconds(seconds: int) -> timedelta:
     """Small helper keeping the top-of-file import list tidy.
 
     `datetime.timedelta` is the only piece of `datetime` we use
     arithmetically and only in the two encoders. Centralising it here
     makes the call sites read as plain `issued_at + delta`.
     """
-    from datetime import timedelta
+    return timedelta(seconds=seconds)
 
     return timedelta(seconds=seconds)

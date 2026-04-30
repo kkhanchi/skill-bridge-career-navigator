@@ -6,10 +6,8 @@ R14.2.
 
 from __future__ import annotations
 
-from app import utils
 from app.config import BaseConfig, DevConfig, ProdConfig, TestConfig, TestSqlConfig
 from app.utils import errors as errors_module
-
 
 # ---------------------------------------------------------------------------
 # JWT_SECRET + TTL defaults

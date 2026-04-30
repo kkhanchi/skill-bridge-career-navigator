@@ -17,7 +17,7 @@ Requirement reference: R1.1, R1.2, R1.3, R1.7, R7.4, R11.3.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import String, create_engine, inspect, select
+from sqlalchemy import String, create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,7 +26,6 @@ from app.db.models import (
     AnalysisORM,
     JobORM,
     ProfileORM,
-    RefreshTokenORM,
     RoadmapORM,
     UserORM,
 )
@@ -265,18 +264,24 @@ def test_roadmap_phases_round_trip_preserves_resource_ids(session):
     session.add(UserORM(id="u1", email="a@b.co", password_hash="x"))
     session.add(
         JobORM(
-            id="job1", title="J", description="d",
-            required_skills=[], preferred_skills=[], experience_level="Mid",
+            id="job1",
+            title="J",
+            description="d",
+            required_skills=[],
+            preferred_skills=[],
+            experience_level="Mid",
         )
     )
     session.add(
         AnalysisORM(
-            id="a1", user_id="u1", job_id="job1", result={}, profile_id=None,
+            id="a1",
+            user_id="u1",
+            job_id="job1",
+            result={},
+            profile_id=None,
         )
     )
-    session.add(
-        RoadmapORM(id="r1", analysis_id="a1", phases=phases)
-    )
+    session.add(RoadmapORM(id="r1", analysis_id="a1", phases=phases))
     session.commit()
     session.expire_all()
 

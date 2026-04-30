@@ -27,7 +27,6 @@ def get_current_user() -> UserRecord:
     """
     user = getattr(g, "current_user", None)
     if user is None:
-        raise RuntimeError(
-            "get_current_user() called before @require_auth populated g"
-        )
+        raise RuntimeError("get_current_user() called before @require_auth populated g")
+    assert isinstance(user, UserRecord)
     return user

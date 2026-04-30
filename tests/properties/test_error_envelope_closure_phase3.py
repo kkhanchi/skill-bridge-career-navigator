@@ -30,7 +30,6 @@ from hypothesis.strategies import (
 
 from app import create_app
 
-
 # Closed set (must match app/utils/errors.py).
 _VALID_CODES = {
     "VALIDATION_FAILED",
@@ -76,13 +75,15 @@ _payload_strategy = dictionaries(
     max_size=5,
 )
 
-_endpoint_strategy = sampled_from([
-    ("POST", "/api/v1/auth/register"),
-    ("POST", "/api/v1/auth/login"),
-    ("POST", "/api/v1/auth/refresh"),
-    ("POST", "/api/v1/auth/logout"),
-    ("GET", "/api/v1/auth/me"),
-])
+_endpoint_strategy = sampled_from(
+    [
+        ("POST", "/api/v1/auth/register"),
+        ("POST", "/api/v1/auth/login"),
+        ("POST", "/api/v1/auth/refresh"),
+        ("POST", "/api/v1/auth/logout"),
+        ("GET", "/api/v1/auth/me"),
+    ]
+)
 
 _header_strategy = one_of(
     just(None),  # no header — exercises AUTH_REQUIRED
@@ -126,7 +127,5 @@ def test_every_error_response_matches_envelope_closure(endpoint, payload, header
     assert isinstance(error, dict)
     assert isinstance(error.get("code"), str) and error["code"]
     assert isinstance(error.get("message"), str) and error["message"]
-    assert error["code"] in _VALID_CODES, (
-        f"{method} {path} returned unknown code {error['code']!r}"
-    )
+    assert error["code"] in _VALID_CODES, f"{method} {path} returned unknown code {error['code']!r}"
     assert response.headers["X-Correlation-ID"]

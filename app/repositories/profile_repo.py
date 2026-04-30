@@ -22,7 +22,7 @@ R12.3, R12.4, R12.7.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.core.models import UserProfile
@@ -45,7 +45,7 @@ class InMemoryProfileRepository:
     # ---- Phase 1/2 methods (unscoped) ----------------------------------
 
     def create(self, profile: UserProfile) -> ProfileRecord:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         record = ProfileRecord(
             id=uuid4().hex,
             profile=profile,
@@ -69,7 +69,7 @@ class InMemoryProfileRepository:
                 id=existing.id,
                 profile=profile,
                 created_at=existing.created_at,
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
             self._records[profile_id] = updated
             return updated
@@ -81,18 +81,14 @@ class InMemoryProfileRepository:
 
     # ---- Phase 3 multi-tenant methods ----------------------------------
 
-    def create_for_user(
-        self, user_id: str, profile: UserProfile
-    ) -> ProfileRecord:
+    def create_for_user(self, user_id: str, profile: UserProfile) -> ProfileRecord:
         """Create a profile owned by ``user_id``."""
         record = self.create(profile)
         with self._lock:
             self._owners[record.id] = user_id
         return record
 
-    def get_for_user(
-        self, profile_id: str, user_id: str
-    ) -> ProfileRecord | None:
+    def get_for_user(self, profile_id: str, user_id: str) -> ProfileRecord | None:
         # Anti-enumeration: unknown id and wrong-owner are
         # indistinguishable from the caller's point of view.
         if self._owners.get(profile_id) != user_id:

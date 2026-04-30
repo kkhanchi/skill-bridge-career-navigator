@@ -11,7 +11,6 @@ Requirement reference: R6.
 
 from __future__ import annotations
 
-
 VALID_PROFILE = {
     "name": "Alice",
     "skills": ["Python", "SQL"],
@@ -26,9 +25,7 @@ VALID_PROFILE = {
 # ---------------------------------------------------------------------------
 
 
-def test_user_b_cannot_read_user_a_profile(
-    authenticated_client, second_authenticated_client
-):
+def test_user_b_cannot_read_user_a_profile(authenticated_client, second_authenticated_client):
     created = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE)
     assert created.status_code == 201
     profile_id = created.get_json()["id"]
@@ -38,9 +35,7 @@ def test_user_b_cannot_read_user_a_profile(
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_user_b_cannot_patch_user_a_profile(
-    authenticated_client, second_authenticated_client
-):
+def test_user_b_cannot_patch_user_a_profile(authenticated_client, second_authenticated_client):
     created = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE)
     profile_id = created.get_json()["id"]
 
@@ -51,9 +46,7 @@ def test_user_b_cannot_patch_user_a_profile(
     assert response.get_json()["error"]["code"] == "NOT_FOUND"
 
 
-def test_user_b_cannot_delete_user_a_profile(
-    authenticated_client, second_authenticated_client
-):
+def test_user_b_cannot_delete_user_a_profile(authenticated_client, second_authenticated_client):
     created = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE)
     profile_id = created.get_json()["id"]
 
@@ -85,9 +78,7 @@ def test_user_b_cannot_create_analysis_referencing_user_a_profile(
     assert response.get_json()["error"]["code"] == "PROFILE_NOT_FOUND"
 
 
-def test_user_b_cannot_read_user_a_analysis(
-    authenticated_client, second_authenticated_client
-):
+def test_user_b_cannot_read_user_a_analysis(authenticated_client, second_authenticated_client):
     # userA creates a profile + analysis.
     profile = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE).get_json()
     analysis = authenticated_client.post(
@@ -95,9 +86,7 @@ def test_user_b_cannot_read_user_a_analysis(
         json={"profile_id": profile["id"], "job_id": "backend-developer"},
     ).get_json()
 
-    response = second_authenticated_client.get(
-        f"/api/v1/analyses/{analysis['id']}"
-    )
+    response = second_authenticated_client.get(f"/api/v1/analyses/{analysis['id']}")
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
@@ -148,6 +137,7 @@ def test_user_b_cannot_patch_resource_in_user_a_roadmap(
     # degenerate. Guard against that by skipping.
     if resource_id is None:
         import pytest
+
         pytest.skip("gap was empty; no resources to probe for isolation")
 
     response = second_authenticated_client.patch(
@@ -172,9 +162,7 @@ def test_cross_tenant_404_response_body_leaks_nothing(
     created = authenticated_client.post("/api/v1/profiles", json=VALID_PROFILE)
     profile_id = created.get_json()["id"]
 
-    body = second_authenticated_client.get(
-        f"/api/v1/profiles/{profile_id}"
-    ).get_json()
+    body = second_authenticated_client.get(f"/api/v1/profiles/{profile_id}").get_json()
 
     # Plain envelope. No fields borrowed from userA's profile.
     assert set(body.keys()) == {"error"}

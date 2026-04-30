@@ -38,7 +38,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-
 # Portable JSON type: plain JSON on SQLite, native JSONB on Postgres.
 # Same column definition works against both — no dialect branching at
 # the model level (ADR-010).
@@ -55,9 +54,7 @@ class UserORM(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    email: Mapped[str] = mapped_column(
-        String(320), unique=True, nullable=False
-    )
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -89,9 +86,7 @@ class ProfileORM(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     skills: Mapped[list[str]] = mapped_column(_JSONB, nullable=False)
     experience_years: Mapped[int] = mapped_column(Integer, nullable=False)
-    education: Mapped[str] = mapped_column(
-        String(200), nullable=False, default=""
-    )
+    education: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     target_role: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -121,9 +116,7 @@ class JobORM(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     required_skills: Mapped[list[str]] = mapped_column(_JSONB, nullable=False)
     preferred_skills: Mapped[list[str]] = mapped_column(_JSONB, nullable=False)
-    experience_level: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True
-    )
+    experience_level: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
 
 class AnalysisORM(Base):

@@ -1,7 +1,7 @@
 """Unit tests for gap analysis — happy path and edge case."""
 
-from models import UserProfile, JobPosting
 from gap_analyzer import analyze_gap
+from models import JobPosting, UserProfile
 
 
 def test_happy_path_gap_analysis(sample_profile, sample_job):

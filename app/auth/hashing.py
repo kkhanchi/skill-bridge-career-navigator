@@ -27,7 +27,6 @@ from argon2.exceptions import (
     VerifyMismatchError,
 )
 
-
 # The payload content of the dummy is irrelevant — only its cost params
 # and validity need to match the hasher's. A caller-supplied constant
 # here keeps the dummy deterministic; a per-request re-hash would add

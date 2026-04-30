@@ -20,7 +20,6 @@ from app.db.base import Base
 from app.db.models import JobORM
 from scripts.seed_db import seed_db
 
-
 _PKG_ROOT = Path(__file__).resolve().parents[2]
 _JOBS_PATH = str(_PKG_ROOT / "data" / "jobs.json")
 
@@ -61,8 +60,7 @@ def test_seed_db_idempotent_across_n_runs(n):
 
         after_n = _row_tuples(engine)
         assert after_n == after_one, (
-            f"state diverged after {n} runs: "
-            f"{len(after_n)} rows vs {len(after_one)} expected"
+            f"state diverged after {n} runs: {len(after_n)} rows vs {len(after_one)} expected"
         )
     finally:
         engine.dispose()

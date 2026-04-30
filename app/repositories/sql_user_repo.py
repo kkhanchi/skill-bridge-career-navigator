@@ -13,7 +13,7 @@ Requirement reference: R12.5, R12.6.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import exists, select
@@ -43,7 +43,7 @@ class SqlAlchemyUserRepository:
             id=uuid4().hex,
             email=normalized,
             password_hash=password_hash,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         session.add(row)
         session.flush()
@@ -65,8 +65,4 @@ class SqlAlchemyUserRepository:
         normalized = _normalize_email(email)
         # EXISTS (...) is a single round-trip returning a bool — cheaper
         # than selecting a row and checking for None.
-        return bool(
-            session.scalar(
-                select(exists().where(UserORM.email == normalized))
-            )
-        )
+        return bool(session.scalar(select(exists().where(UserORM.email == normalized))))

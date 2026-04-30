@@ -19,16 +19,14 @@ from hypothesis.strategies import text
 
 from app import create_app
 
-
 _PROPERTY_SETTINGS = settings(
     max_examples=20,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
 )
 
-_password_strategy = (
-    text(min_size=8, max_size=40)
-    .filter(lambda s: len(s.strip()) >= 8 and len(s) <= 128)
+_password_strategy = text(min_size=8, max_size=40).filter(
+    lambda s: len(s.strip()) >= 8 and len(s) <= 128
 )
 
 

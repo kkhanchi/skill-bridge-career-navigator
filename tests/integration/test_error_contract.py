@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 from flask import Blueprint
 
-
 VALID_ERROR_CODES = {
     "VALIDATION_FAILED",
     "PROFILE_INVALID",
@@ -159,14 +158,14 @@ def test_error_codes_used_by_framework_are_in_the_valid_set(authenticated_client
     new error codes are introduced later."""
     sweep = [
         # (method, path, body or None, expected status >= 400)
-        ("POST", "/api/v1/profiles", {}, 400),                             # VALIDATION_FAILED
-        ("GET", "/api/v1/profiles/missing", None, 404),                    # NOT_FOUND
-        ("PATCH", "/api/v1/profiles/missing", {"name": "X"}, 404),         # NOT_FOUND
-        ("DELETE", "/api/v1/profiles/missing", None, 404),                 # NOT_FOUND
-        ("GET", "/api/v1/jobs/missing-slug", None, 404),                   # JOB_NOT_FOUND
-        ("GET", "/api/v1/analyses/missing", None, 404),                    # ANALYSIS_NOT_FOUND
+        ("POST", "/api/v1/profiles", {}, 400),  # VALIDATION_FAILED
+        ("GET", "/api/v1/profiles/missing", None, 404),  # NOT_FOUND
+        ("PATCH", "/api/v1/profiles/missing", {"name": "X"}, 404),  # NOT_FOUND
+        ("DELETE", "/api/v1/profiles/missing", None, 404),  # NOT_FOUND
+        ("GET", "/api/v1/jobs/missing-slug", None, 404),  # JOB_NOT_FOUND
+        ("GET", "/api/v1/analyses/missing", None, 404),  # ANALYSIS_NOT_FOUND
         ("POST", "/api/v1/analyses", {"profile_id": "p", "job_id": "j"}, 404),  # PROFILE_NOT_FOUND
-        ("POST", "/api/v1/roadmaps", {"analysis_id": "nope"}, 404),        # ANALYSIS_NOT_FOUND
+        ("POST", "/api/v1/roadmaps", {"analysis_id": "nope"}, 404),  # ANALYSIS_NOT_FOUND
     ]
 
     for method, path, body, expected_status in sweep:
@@ -186,7 +185,6 @@ def test_error_codes_used_by_framework_are_in_the_valid_set(authenticated_client
         assert response.headers["X-Correlation-ID"]
 
 
-
 # ---------------------------------------------------------------------------
 # Phase 3 error-envelope sweeps (R14.1, R14.2, R14.6)
 # ---------------------------------------------------------------------------
@@ -194,7 +192,6 @@ def test_error_codes_used_by_framework_are_in_the_valid_set(authenticated_client
 
 def test_phase3_auth_failure_codes_are_in_the_valid_set(client):
     """Every /auth/* 4xx path produces a code that's in the closed set."""
-    import jwt  # local import — only needed for forged-secret probe
 
     # Register once so the duplicate + login paths have something to hit.
     client.post(
@@ -208,20 +205,34 @@ def test_phase3_auth_failure_codes_are_in_the_valid_set(client):
         # 401 AUTH_REQUIRED
         ("GET", "/api/v1/auth/me", None, {}, 401, "AUTH_REQUIRED"),
         # 401 TOKEN_INVALID — malformed access
-        ("GET", "/api/v1/auth/me", None,
-         {"headers": {"Authorization": "Bearer not.a.jwt"}},
-         401, "TOKEN_INVALID"),
+        (
+            "GET",
+            "/api/v1/auth/me",
+            None,
+            {"headers": {"Authorization": "Bearer not.a.jwt"}},
+            401,
+            "TOKEN_INVALID",
+        ),
         # 401 INVALID_CREDENTIALS
-        ("POST", "/api/v1/auth/login",
-         {"email": "alice@example.com", "password": "wrongpass123"},
-         {}, 401, "INVALID_CREDENTIALS"),
+        (
+            "POST",
+            "/api/v1/auth/login",
+            {"email": "alice@example.com", "password": "wrongpass123"},
+            {},
+            401,
+            "INVALID_CREDENTIALS",
+        ),
         # 409 EMAIL_TAKEN — register the same email twice.
-        ("POST", "/api/v1/auth/register",
-         {"email": "alice@example.com", "password": "correct horse battery staple"},
-         {}, 409, "EMAIL_TAKEN"),
+        (
+            "POST",
+            "/api/v1/auth/register",
+            {"email": "alice@example.com", "password": "correct horse battery staple"},
+            {},
+            409,
+            "EMAIL_TAKEN",
+        ),
         # 400 VALIDATION_FAILED on malformed register body
-        ("POST", "/api/v1/auth/register", {"email": "not-an-email"}, {}, 400,
-         "VALIDATION_FAILED"),
+        ("POST", "/api/v1/auth/register", {"email": "not-an-email"}, {}, 400, "VALIDATION_FAILED"),
     ]
 
     for method, path, body, kwargs, expected_status, expected_code in auth_probes:

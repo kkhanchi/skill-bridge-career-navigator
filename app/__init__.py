@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 from uuid import uuid4
 
 from flask import Flask, g, request
@@ -114,7 +115,7 @@ def _register_request_hooks(app: Flask) -> None:
         g.db_session = ext.session_factory()
 
     @app.after_request
-    def _cid_end(response):
+    def _cid_end(response: Any) -> Any:
         # Always emit the header, even on error responses (R6.6, R7.3).
         response.headers["X-Correlation-ID"] = getattr(g, "correlation_id", "-")
         start = getattr(g, "request_start", None)
@@ -124,10 +125,12 @@ def _register_request_hooks(app: Flask) -> None:
             duration_ms = 0
         logger.info(
             "request.end",
-            extra={"extra_fields": {
-                "status": response.status_code,
-                "duration_ms": duration_ms,
-            }},
+            extra={
+                "extra_fields": {
+                    "status": response.status_code,
+                    "duration_ms": duration_ms,
+                }
+            },
         )
         return response
 
@@ -195,8 +198,7 @@ def create_app(config_name: str = "dev") -> Flask:
     """
     if config_name not in CONFIG_MAP:
         raise ValueError(
-            f"Unknown config_name {config_name!r}; "
-            f"expected one of {sorted(CONFIG_MAP.keys())}"
+            f"Unknown config_name {config_name!r}; expected one of {sorted(CONFIG_MAP.keys())}"
         )
 
     app = Flask(__name__)

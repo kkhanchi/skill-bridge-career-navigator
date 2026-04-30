@@ -41,17 +41,13 @@ class InMemoryAnalysisRepository:
 
     # ---- Phase 3 multi-tenant methods ----------------------------------
 
-    def create_for_user(
-        self, user_id: str, record: AnalysisRecord
-    ) -> AnalysisRecord:
+    def create_for_user(self, user_id: str, record: AnalysisRecord) -> AnalysisRecord:
         stored = self.create(record)
         with self._lock:
             self._owners[stored.id] = user_id
         return stored
 
-    def get_for_user(
-        self, analysis_id: str, user_id: str
-    ) -> AnalysisRecord | None:
+    def get_for_user(self, analysis_id: str, user_id: str) -> AnalysisRecord | None:
         # Anti-enumeration: wrong-owner collapses to the same "not found"
         # surface as unknown id.
         if self._owners.get(analysis_id) != user_id:

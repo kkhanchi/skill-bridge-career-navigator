@@ -117,10 +117,13 @@ def update_profile(
 def save_profile(profile: UserProfile) -> None:
     """Persist profile to ``st.session_state``. Imports streamlit lazily."""
     import streamlit as st
+
     st.session_state["user_profile"] = profile
 
 
 def load_profile() -> UserProfile | None:
     """Load profile from ``st.session_state``, or ``None`` if not found."""
     import streamlit as st
-    return st.session_state.get("user_profile", None)
+
+    profile: UserProfile | None = st.session_state.get("user_profile", None)
+    return profile

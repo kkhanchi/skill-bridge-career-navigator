@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from flask import Flask, current_app
 from flask_limiter import Limiter
@@ -32,12 +33,12 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth.hashing import Argon2Hasher
 from app.core.ai_engine import FallbackCategorizer, SkillCategorizerInterface, get_categorizer
 from app.core.job_catalog import load_jobs
 from app.core.models import LearningResource
 from app.core.resume_parser import load_taxonomy
 from app.core.roadmap_generator import _load_resources
-from app.auth.hashing import Argon2Hasher
 from app.db.engine import build_engine
 from app.db.session import set_session_factory
 from app.repositories.analysis_repo import InMemoryAnalysisRepository
@@ -71,7 +72,7 @@ _EXT_KEY = "skillbridge"
 # ---------------------------------------------------------------------------
 
 
-def _config_value(config, key: str) -> str:
+def _config_value(config: Any, key: str) -> str:
     """Read a config value supporting both Flask ``app.config`` (dict)
     and config classes with class-level attributes (unit tests).
     """
@@ -82,7 +83,7 @@ def _config_value(config, key: str) -> str:
     return str(value or "").strip()
 
 
-def pick_backend(config) -> str:
+def pick_backend(config: Any) -> str:
     """Pick the repository backend for *config*.
 
     Returns one of ``"memory"``, ``"sqlite"``, or ``"postgres"``.
@@ -340,12 +341,14 @@ def init_extensions(app: Flask) -> None:
 
     logger.info(
         "extensions.ready",
-        extra={"extra_fields": {
-            "backend": ext._backend,
-            "taxonomy": len(ext.taxonomy),
-            "resources": len(ext.resources),
-            "categorizer": type(ext.categorizer).__name__,
-        }},
+        extra={
+            "extra_fields": {
+                "backend": ext._backend,
+                "taxonomy": len(ext.taxonomy),
+                "resources": len(ext.resources),
+                "categorizer": type(ext.categorizer).__name__,
+            }
+        },
     )
 
 
@@ -368,13 +371,16 @@ def _enforce_jwt_secret(app: Flask) -> None:
     if env == "dev" and secret == "dev-secret-do-not-use-in-prod":
         logger.warning(
             "jwt_secret.using_dev_default",
-            extra={"extra_fields": {
-                "hint": "set JWT_SECRET env var for any shared deployment",
-            }},
+            extra={
+                "extra_fields": {
+                    "hint": "set JWT_SECRET env var for any shared deployment",
+                }
+            },
         )
 
 
 def get_ext(app: Flask | None = None) -> Extensions:
     """Return the Extensions bundle for *app* (defaults to current_app)."""
     target = app if app is not None else current_app
-    return target.extensions[_EXT_KEY]
+    ext: Extensions = target.extensions[_EXT_KEY]
+    return ext

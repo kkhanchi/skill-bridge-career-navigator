@@ -15,15 +15,11 @@ Requirement reference: R1.1, R1.2, R1.6.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
-
 
 _PKG_ROOT = Path(__file__).resolve().parents[2]
 
@@ -41,7 +37,9 @@ def _build_alembic_config(db_path: Path) -> Config:
     return config
 
 
-def _introspect(db_url: str) -> tuple[set[str], dict[str, set[tuple[str, ...]]], dict[str, set[tuple[str, ...]]]]:
+def _introspect(
+    db_url: str,
+) -> tuple[set[str], dict[str, set[tuple[str, ...]]], dict[str, set[tuple[str, ...]]]]:
     """Return (tables, indexes, unique_constraints) for the DB.
 
     ``indexes`` maps table -> set of column-tuples for single/multi-column
@@ -56,12 +54,8 @@ def _introspect(db_url: str) -> tuple[set[str], dict[str, set[tuple[str, ...]]],
         indexes: dict[str, set[tuple[str, ...]]] = {}
         uniques: dict[str, set[tuple[str, ...]]] = {}
         for table in tables:
-            indexes[table] = {
-                tuple(idx["column_names"]) for idx in insp.get_indexes(table)
-            }
-            uniques[table] = {
-                tuple(u["column_names"]) for u in insp.get_unique_constraints(table)
-            }
+            indexes[table] = {tuple(idx["column_names"]) for idx in insp.get_indexes(table)}
+            uniques[table] = {tuple(u["column_names"]) for u in insp.get_unique_constraints(table)}
         return tables, indexes, uniques
     finally:
         engine.dispose()
@@ -105,18 +99,15 @@ def test_upgrade_head_creates_expected_tables_and_indexes(tmp_path):
 
     # Phase 3 (migration 0002): profiles.user_id and analyses.user_id
     # are NOT NULL after the flip.
-    from sqlalchemy import create_engine, inspect as sa_inspect
+    from sqlalchemy import create_engine
+    from sqlalchemy import inspect as sa_inspect
 
     eng = create_engine(f"sqlite:///{db_file}")
     try:
         insp = sa_inspect(eng)
-        profiles_user_id = next(
-            c for c in insp.get_columns("profiles") if c["name"] == "user_id"
-        )
+        profiles_user_id = next(c for c in insp.get_columns("profiles") if c["name"] == "user_id")
         assert profiles_user_id["nullable"] is False
-        analyses_user_id = next(
-            c for c in insp.get_columns("analyses") if c["name"] == "user_id"
-        )
+        analyses_user_id = next(c for c in insp.get_columns("analyses") if c["name"] == "user_id")
         assert analyses_user_id["nullable"] is False
     finally:
         eng.dispose()

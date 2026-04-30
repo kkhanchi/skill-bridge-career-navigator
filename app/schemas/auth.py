@@ -43,7 +43,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
     @model_validator(mode="after")
-    def _password_not_all_whitespace(self) -> "RegisterRequest":
+    def _password_not_all_whitespace(self) -> RegisterRequest:
         # 8..128 chars of whitespace would technically pass the length
         # check but isn't a meaningful password. Mirrors the design's
         # "not all-whitespace" rule (R1.2).
@@ -66,7 +66,7 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
     @model_validator(mode="after")
-    def _password_not_all_whitespace(self) -> "LoginRequest":
+    def _password_not_all_whitespace(self) -> LoginRequest:
         if self.password.strip() == "":
             raise ValueError("Password must not be all whitespace")
         return self

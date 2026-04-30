@@ -16,8 +16,6 @@ Requirement reference: R3.5, R3.6, R3.7.
 
 from __future__ import annotations
 
-import pytest
-
 from app.config import (
     CONFIG_MAP,
     BaseConfig,

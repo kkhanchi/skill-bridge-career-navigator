@@ -1,13 +1,14 @@
 """Shared test fixtures for Skill-Bridge Career Navigator."""
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Add parent directory to path so modules can be imported
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from models import UserProfile, JobPosting, LearningResource
+from models import JobPosting, LearningResource, UserProfile
 
 
 @pytest.fixture
@@ -35,27 +36,53 @@ def sample_job():
 @pytest.fixture
 def sample_taxonomy():
     return [
-        "Python", "Java", "JavaScript", "SQL", "REST APIs", "Git",
-        "Docker", "AWS", "Redis", "React", "Machine Learning",
+        "Python",
+        "Java",
+        "JavaScript",
+        "SQL",
+        "REST APIs",
+        "Git",
+        "Docker",
+        "AWS",
+        "Redis",
+        "React",
+        "Machine Learning",
     ]
 
 
 @pytest.fixture
 def sample_resources():
     return [
-        LearningResource(name="REST API Course", skill="REST APIs",
-                         resource_type="course", estimated_hours=12,
-                         url="https://example.com/rest"),
-        LearningResource(name="Docker Essentials", skill="Docker",
-                         resource_type="course", estimated_hours=12,
-                         url="https://example.com/docker"),
-        LearningResource(name="AWS Cloud Practitioner", skill="AWS",
-                         resource_type="certification", estimated_hours=25,
-                         url="https://example.com/aws"),
-        LearningResource(name="Redis Caching", skill="Redis",
-                         resource_type="course", estimated_hours=8,
-                         url="https://example.com/redis"),
+        LearningResource(
+            name="REST API Course",
+            skill="REST APIs",
+            resource_type="course",
+            estimated_hours=12,
+            url="https://example.com/rest",
+        ),
+        LearningResource(
+            name="Docker Essentials",
+            skill="Docker",
+            resource_type="course",
+            estimated_hours=12,
+            url="https://example.com/docker",
+        ),
+        LearningResource(
+            name="AWS Cloud Practitioner",
+            skill="AWS",
+            resource_type="certification",
+            estimated_hours=25,
+            url="https://example.com/aws",
+        ),
+        LearningResource(
+            name="Redis Caching",
+            skill="Redis",
+            resource_type="course",
+            estimated_hours=8,
+            url="https://example.com/redis",
+        ),
     ]
+
 
 # ---------------------------------------------------------------------------
 # Flask integration fixtures (added in Phase 1 / Stage B).
@@ -125,7 +152,6 @@ def sql_client(sql_app):
 # ---------------------------------------------------------------------------
 
 from app.auth.tokens import encode_access_token
-
 
 _TEST_USER_PASSWORD = "correct horse battery staple"
 
@@ -226,9 +252,7 @@ class _AuthedClient:
         return self._client.patch(*args, headers=self._merge_headers(headers), **kwargs)
 
     def delete(self, *args, headers=None, **kwargs):
-        return self._client.delete(
-            *args, headers=self._merge_headers(headers), **kwargs
-        )
+        return self._client.delete(*args, headers=self._merge_headers(headers), **kwargs)
 
     def put(self, *args, headers=None, **kwargs):
         return self._client.put(*args, headers=self._merge_headers(headers), **kwargs)

@@ -11,11 +11,10 @@ Requirement reference: R5.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.auth.tokens import encode_access_token
-
 
 _PASSWORD = "correct horse battery staple"
 
@@ -63,9 +62,7 @@ def test_me_without_authorization_header_is_auth_required(client):
 
 
 def test_me_with_non_bearer_header_is_auth_required(client):
-    response = client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Basic admin:hunter2"}
-    )
+    response = client.get("/api/v1/auth/me", headers={"Authorization": "Basic admin:hunter2"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "AUTH_REQUIRED"
 
@@ -80,7 +77,7 @@ def test_me_with_expired_access_token_is_token_expired(app, client):
     user_id = tokens["user"]["id"]
 
     with app.app_context():
-        in_the_past = datetime.now(timezone.utc) - timedelta(hours=2)
+        in_the_past = datetime.now(UTC) - timedelta(hours=2)
         expired = encode_access_token(user_id, now=in_the_past)
 
     response = client.get(
@@ -103,16 +100,12 @@ def test_me_with_token_for_unknown_user_is_token_invalid(app, client):
     with app.app_context():
         token = encode_access_token(uuid4().hex)
 
-    response = client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
 
 def test_me_with_malformed_token_is_token_invalid(client):
-    response = client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Bearer not.a.jwt"}
-    )
+    response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not.a.jwt"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"

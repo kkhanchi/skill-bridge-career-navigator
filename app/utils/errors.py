@@ -40,12 +40,12 @@ INTERNAL_ERROR = "INTERNAL_ERROR"
 # in Phase 3. Library-internal exceptions (PyJWT, argon2-cffi,
 # flask-limiter) map to these via handlers or the @require_auth decorator
 # before reaching the response.
-AUTH_REQUIRED = "AUTH_REQUIRED"              # no / malformed Authorization header
+AUTH_REQUIRED = "AUTH_REQUIRED"  # no / malformed Authorization header
 INVALID_CREDENTIALS = "INVALID_CREDENTIALS"  # login failed (unknown email OR wrong pw)
-TOKEN_EXPIRED = "TOKEN_EXPIRED"              # JWT exp has passed
-TOKEN_INVALID = "TOKEN_INVALID"              # bad signature/type/claims, or revoked refresh
-EMAIL_TAKEN = "EMAIL_TAKEN"                  # register collided with existing user
-RATE_LIMITED = "RATE_LIMITED"                # flask-limiter rejection
+TOKEN_EXPIRED = "TOKEN_EXPIRED"  # JWT exp has passed
+TOKEN_INVALID = "TOKEN_INVALID"  # bad signature/type/claims, or revoked refresh
+EMAIL_TAKEN = "EMAIL_TAKEN"  # register collided with existing user
+RATE_LIMITED = "RATE_LIMITED"  # flask-limiter rejection
 
 # Mapping Flask HTTPException status codes to our own codes when the
 # framework raises them directly (e.g. unknown route -> 404).
@@ -79,7 +79,7 @@ class ApiError(Exception):
         self.details = details
 
 
-def _envelope(code: str, message: str, details: dict[str, Any] | None = None):
+def _envelope(code: str, message: str, details: dict[str, Any] | None = None) -> Any:
     """Build a JSON response matching the Error_Envelope contract."""
     body: dict[str, Any] = {"error": {"code": code, "message": message}}
     if details is not None:
@@ -98,16 +98,18 @@ def register_error_handlers(app: Flask) -> None:
     """Wire the three error handlers the Error_Envelope contract depends on."""
 
     @app.errorhandler(ApiError)
-    def _handle_api_error(err: ApiError):
+    def _handle_api_error(err: ApiError) -> tuple[Any, int]:
         # Known, intentional error. Info-level log is enough; the handler
         # is the author of the failure semantics, not a surprise.
         logger.info(
             "api_error",
-            extra={"extra_fields": {
-                "code": err.code,
-                "status": err.status,
-                "cid": _cid(),
-            }},
+            extra={
+                "extra_fields": {
+                    "code": err.code,
+                    "status": err.status,
+                    "cid": _cid(),
+                }
+            },
         )
         return _envelope(err.code, err.message, err.details), err.status
 
@@ -119,7 +121,7 @@ def register_error_handlers(app: Flask) -> None:
         from flask_limiter.errors import RateLimitExceeded
 
         @app.errorhandler(RateLimitExceeded)
-        def _handle_rate_limit(err: "RateLimitExceeded"):  # noqa: F821
+        def _handle_rate_limit(err: RateLimitExceeded) -> tuple[Any, int]:  # noqa: F821
             logger.info(
                 "rate_limited",
                 extra={"extra_fields": {"cid": _cid(), "description": str(err.description)}},
@@ -135,7 +137,7 @@ def register_error_handlers(app: Flask) -> None:
         pass
 
     @app.errorhandler(HTTPException)
-    def _handle_http_exception(err: HTTPException):
+    def _handle_http_exception(err: HTTPException) -> tuple[Any, int]:
         # Flask-raised exceptions: unknown route, disallowed method, etc.
         status = err.code or 500
         code = _HTTP_STATUS_TO_CODE.get(status, f"HTTP_{status}")
@@ -143,7 +145,9 @@ def register_error_handlers(app: Flask) -> None:
         return _envelope(code, message), status
 
     @app.errorhandler(Exception)
-    def _handle_unexpected(err: Exception):  # pragma: no cover - exercised via test-only route
+    def _handle_unexpected(
+        err: Exception,
+    ) -> tuple[Any, int]:  # pragma: no cover - exercised via test-only route
         # Anything uncaught: log full traceback with cid, then a generic 500.
         logger.exception(
             "unhandled_exception",

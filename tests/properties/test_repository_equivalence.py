@@ -23,8 +23,13 @@ Property 1: Repository-backend equivalence — Validates R2.6.
 
 from __future__ import annotations
 
-import pytest
 from hypothesis import HealthCheck, settings
+from hypothesis.stateful import (
+    Bundle,
+    RuleBasedStateMachine,
+    invariant,
+    rule,
+)
 from hypothesis.strategies import (
     booleans,
     integers,
@@ -32,20 +37,10 @@ from hypothesis.strategies import (
     sampled_from,
     text,
 )
-from hypothesis.stateful import (
-    Bundle,
-    RuleBasedStateMachine,
-    initialize,
-    invariant,
-    precondition,
-    rule,
-)
 
 from app import create_app
 from app.auth.tokens import encode_access_token
 from app.db.base import Base
-from app.db.models import JobORM
-
 
 # Skill alphabet is small so overlaps with the seed job's required
 # skills are likely — gives gap analyses interesting outputs without
@@ -111,6 +106,7 @@ def _build_sql_app():
         # file in init_extensions). The repo-equivalence property
         # depends on identical catalogs on both sides.
         from scripts.seed_db import seed_db
+
         jobs_path = app.config["JOBS_PATH"]
         seed_db(engine=ext.engine, jobs_path=jobs_path)
     return app
@@ -145,18 +141,10 @@ class DualBackendStateMachine(RuleBasedStateMachine):
         # The two users are independent — each operates entirely
         # inside its own tenant scope, which is what the original
         # equivalence property cares about anyway.
-        mem_token = _register_user_and_mint_token(
-            self.memory_app, "equiv-mem@example.com"
-        )
-        sql_token = _register_user_and_mint_token(
-            self.sql_app, "equiv-sql@example.com"
-        )
-        self.memory_client = _AuthClientAdapter(
-            self.memory_app.test_client(), mem_token
-        )
-        self.sql_client = _AuthClientAdapter(
-            self.sql_app.test_client(), sql_token
-        )
+        mem_token = _register_user_and_mint_token(self.memory_app, "equiv-mem@example.com")
+        sql_token = _register_user_and_mint_token(self.sql_app, "equiv-sql@example.com")
+        self.memory_client = _AuthClientAdapter(self.memory_app.test_client(), mem_token)
+        self.sql_client = _AuthClientAdapter(self.sql_app.test_client(), sql_token)
         # Map memory_id -> sql_id for each resource type. Ids differ
         # between backends (both uuid4 hex, but independently
         # generated); we track the pairing so rules can address the
@@ -293,11 +281,18 @@ class DualBackendStateMachine(RuleBasedStateMachine):
         # Phase labels + resource content must match (resource ids are
         # uuid4-fresh on each backend, so compare content only).
         assert len(mem_body["phases"]) == len(sql_body["phases"])
-        for mp, sp in zip(mem_body["phases"], sql_body["phases"]):
+        for mp, sp in zip(mem_body["phases"], sql_body["phases"], strict=True):
             assert mp["label"] == sp["label"]
             assert len(mp["resources"]) == len(sp["resources"])
-            for mr, sr in zip(mp["resources"], sp["resources"]):
-                for field in ("name", "skill", "resource_type", "estimated_hours", "url", "completed"):
+            for mr, sr in zip(mp["resources"], sp["resources"], strict=True):
+                for field in (
+                    "name",
+                    "skill",
+                    "resource_type",
+                    "estimated_hours",
+                    "url",
+                    "completed",
+                ):
                     assert mr[field] == sr[field]
         bundle_id = mem_body["id"]
         # Pair the roadmap AND the first resource id (if any) so
@@ -330,6 +325,7 @@ class DualBackendStateMachine(RuleBasedStateMachine):
         sql_ext = self.sql_app.extensions["skillbridge"]
         with sql_ext.session_factory() as session:
             from app.db.models import RoadmapORM
+
             row = session.get(RoadmapORM, sql_roadmap)
             assert row is not None
             first_phase_json = next(

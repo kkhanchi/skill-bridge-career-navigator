@@ -31,8 +31,12 @@ def test_list_default_pagination_returns_all_jobs(client):
     # Every item has the required fields.
     for item in body["items"]:
         assert set(item.keys()) == {
-            "id", "title", "description",
-            "required_skills", "preferred_skills", "experience_level",
+            "id",
+            "title",
+            "description",
+            "required_skills",
+            "preferred_skills",
+            "experience_level",
         }
 
 
