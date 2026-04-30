@@ -23,7 +23,7 @@ R12.7.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.repositories.base import RoadmapRecord
 
@@ -63,22 +63,18 @@ class InMemoryRoadmapRepository:
             phase_idx, resource_idx = position
             resource = record.roadmap.phases[phase_idx].resources[resource_idx]
             resource.completed = completed
-            record.updated_at = datetime.now(timezone.utc)
+            record.updated_at = datetime.now(UTC)
             return record
 
     # ---- Phase 3 multi-tenant methods ----------------------------------
 
-    def create_for_user(
-        self, user_id: str, record: RoadmapRecord
-    ) -> RoadmapRecord:
+    def create_for_user(self, user_id: str, record: RoadmapRecord) -> RoadmapRecord:
         stored = self.create(record)
         with self._lock:
             self._owners[stored.id] = user_id
         return stored
 
-    def get_for_user(
-        self, roadmap_id: str, user_id: str
-    ) -> RoadmapRecord | None:
+    def get_for_user(self, roadmap_id: str, user_id: str) -> RoadmapRecord | None:
         if self._owners.get(roadmap_id) != user_id:
             return None
         return self._records.get(roadmap_id)

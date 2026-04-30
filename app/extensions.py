@@ -32,12 +32,12 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.auth.hashing import Argon2Hasher
 from app.core.ai_engine import FallbackCategorizer, SkillCategorizerInterface, get_categorizer
 from app.core.job_catalog import load_jobs
 from app.core.models import LearningResource
 from app.core.resume_parser import load_taxonomy
 from app.core.roadmap_generator import _load_resources
-from app.auth.hashing import Argon2Hasher
 from app.db.engine import build_engine
 from app.db.session import set_session_factory
 from app.repositories.analysis_repo import InMemoryAnalysisRepository
@@ -340,12 +340,14 @@ def init_extensions(app: Flask) -> None:
 
     logger.info(
         "extensions.ready",
-        extra={"extra_fields": {
-            "backend": ext._backend,
-            "taxonomy": len(ext.taxonomy),
-            "resources": len(ext.resources),
-            "categorizer": type(ext.categorizer).__name__,
-        }},
+        extra={
+            "extra_fields": {
+                "backend": ext._backend,
+                "taxonomy": len(ext.taxonomy),
+                "resources": len(ext.resources),
+                "categorizer": type(ext.categorizer).__name__,
+            }
+        },
     )
 
 
@@ -368,9 +370,11 @@ def _enforce_jwt_secret(app: Flask) -> None:
     if env == "dev" and secret == "dev-secret-do-not-use-in-prod":
         logger.warning(
             "jwt_secret.using_dev_default",
-            extra={"extra_fields": {
-                "hint": "set JWT_SECRET env var for any shared deployment",
-            }},
+            extra={
+                "extra_fields": {
+                    "hint": "set JWT_SECRET env var for any shared deployment",
+                }
+            },
         )
 
 

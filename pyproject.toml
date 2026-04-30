@@ -40,6 +40,15 @@ ignore = [
     # Flask views legitimately use function calls in decorator
     # arguments (e.g. `@limiter.limit(Value())`). Overruled globally.
     "B008",
+    # SIM108 flags every if/else that could be a ternary. The
+    # two-line if/else form is frequently more readable than
+    # a nested ternary (see roadmap_generator's phase_idx math).
+    # Kept off globally to avoid readability regressions.
+    "SIM108",
+    # SIM105 flags try/except/pass patterns as "use contextlib.suppress".
+    # The explicit form is clearer in the DB teardown hook where we
+    # want the reader to SEE the swallow-and-continue intent.
+    "SIM105",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -47,6 +56,11 @@ ignore = [
 # "assert used") would flag every test. Suppressed only under
 # tests/.
 "tests/**" = ["S101"]
+# Conftest organises fixtures into labelled sections with imports
+# deferred to the top of each section for clarity. That triggers
+# E402 "module-level import not at top of file" — intentional
+# organisation, not a bug.
+"tests/conftest.py" = ["S101", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"

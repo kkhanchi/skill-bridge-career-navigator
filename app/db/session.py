@@ -25,7 +25,6 @@ from __future__ import annotations
 from flask import g, has_request_context
 from sqlalchemy.orm import Session, sessionmaker
 
-
 # Installed at ``init_extensions`` time when the SQL backend is
 # selected. Remains ``None`` on memory-backed apps — any call to
 # ``get_db_session`` on such an app hits the guard below.
@@ -54,13 +53,10 @@ def get_db_session() -> Session:
             using a ``None`` session.
     """
     if not has_request_context():
-        raise RuntimeError(
-            "get_db_session() called outside a Flask request context"
-        )
+        raise RuntimeError("get_db_session() called outside a Flask request context")
     session = getattr(g, "db_session", None)
     if session is None:
         raise RuntimeError(
-            "No DB session bound on flask.g — memory backend in use or "
-            "request hooks not installed"
+            "No DB session bound on flask.g — memory backend in use or request hooks not installed"
         )
     return session

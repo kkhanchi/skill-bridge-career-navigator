@@ -13,7 +13,6 @@ Requirement reference: R1, R13.3.
 
 from __future__ import annotations
 
-
 VALID = {"email": "alice@example.com", "password": "correct horse battery staple"}
 
 

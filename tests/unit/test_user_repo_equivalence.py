@@ -28,13 +28,12 @@ Requirement reference: R12.5, R12.6, R12.8.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
 from hypothesis import HealthCheck, settings
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, rule
-from hypothesis.strategies import booleans, emails, text
+from hypothesis.strategies import emails, text
 
 from app import create_app
 from app.db.base import Base
@@ -42,7 +41,6 @@ from app.repositories.refresh_token_repo import InMemoryRefreshTokenRepository
 from app.repositories.sql_refresh_token_repo import SqlAlchemyRefreshTokenRepository
 from app.repositories.sql_user_repo import SqlAlchemyUserRepository
 from app.repositories.user_repo import InMemoryUserRepository
-
 
 # ---------------------------------------------------------------------------
 # SQL world helper
@@ -129,9 +127,7 @@ class UserRepositoryStateMachine(RuleBasedStateMachine):
             return None
 
         mem_rec = self.mem_repo.create(email=email, password_hash=pw_hash)
-        sql_rec = self._with_sql(
-            lambda: self.sql_repo.create(email=email, password_hash=pw_hash)
-        )
+        sql_rec = self._with_sql(lambda: self.sql_repo.create(email=email, password_hash=pw_hash))
         assert mem_rec.email == sql_rec.email
         assert mem_rec.password_hash == sql_rec.password_hash
         self._id_pairs[mem_rec.id] = sql_rec.id
@@ -205,6 +201,7 @@ class RefreshTokenRepositoryStateMachine(RuleBasedStateMachine):
         from app.repositories.sql_user_repo import SqlAlchemyUserRepository
 
         user_repo = SqlAlchemyUserRepository()
+
         # Seed a user so the refresh_tokens.user_id FK is satisfied.
         # _run_in_sql_request commits on success so the row survives
         # into the per-rule request contexts that follow.
@@ -223,12 +220,10 @@ class RefreshTokenRepositoryStateMachine(RuleBasedStateMachine):
     @rule(target=jtis)
     def create(self):
         jti = uuid4().hex
-        expires_at = datetime.now(timezone.utc) + timedelta(days=14)
+        expires_at = datetime.now(UTC) + timedelta(days=14)
         self.mem_repo.create(user_id=self.user_id, jti=jti, expires_at=expires_at)
         self._with_sql(
-            lambda: self.sql_repo.create(
-                user_id=self.user_id, jti=jti, expires_at=expires_at
-            )
+            lambda: self.sql_repo.create(user_id=self.user_id, jti=jti, expires_at=expires_at)
         )
         return jti
 

@@ -124,10 +124,12 @@ def _register_request_hooks(app: Flask) -> None:
             duration_ms = 0
         logger.info(
             "request.end",
-            extra={"extra_fields": {
-                "status": response.status_code,
-                "duration_ms": duration_ms,
-            }},
+            extra={
+                "extra_fields": {
+                    "status": response.status_code,
+                    "duration_ms": duration_ms,
+                }
+            },
         )
         return response
 
@@ -195,8 +197,7 @@ def create_app(config_name: str = "dev") -> Flask:
     """
     if config_name not in CONFIG_MAP:
         raise ValueError(
-            f"Unknown config_name {config_name!r}; "
-            f"expected one of {sorted(CONFIG_MAP.keys())}"
+            f"Unknown config_name {config_name!r}; expected one of {sorted(CONFIG_MAP.keys())}"
         )
 
     app = Flask(__name__)

@@ -47,7 +47,6 @@ from app.repositories.base import (
     UserRecord,
 )
 
-
 # ---------------------------------------------------------------------------
 # ProfileRecord <-> ProfileORM
 # ---------------------------------------------------------------------------
@@ -229,9 +228,7 @@ def roadmap_row_from_record(rec: RoadmapRecord) -> RoadmapORM:
     phases_json = [
         {
             "label": phase.label,
-            "resources": [
-                _learning_resource_to_dict(res) for res in phase.resources
-            ],
+            "resources": [_learning_resource_to_dict(res) for res in phase.resources],
         }
         for phase in rec.roadmap.phases
     ]

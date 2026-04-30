@@ -9,10 +9,8 @@ Requirement reference: R1.1, R3.6, R4.1, R5.3, R5.5, R11.2.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
-
-import pytest
 
 from app.core.models import (
     CategorizationResult,
@@ -28,7 +26,6 @@ from app.repositories.base import AnalysisRecord, RoadmapRecord
 from app.repositories.job_repo import InMemoryJobRepository, _slugify
 from app.repositories.profile_repo import InMemoryProfileRepository
 from app.repositories.roadmap_repo import InMemoryRoadmapRepository
-
 
 # ---------------------------------------------------------------------------
 # ProfileRepository
@@ -127,11 +124,15 @@ def test_job_repo_slug_stability_across_instances():
 
     ids_a = [rec.id for rec in a.list(page=1, limit=10, keyword="", skill="")[0]]
     ids_b = [rec.id for rec in b.list(page=1, limit=10, keyword="", skill="")[0]]
-    assert ids_a == ids_b == [
-        "backend-developer",
-        "data-scientist",
-        "devops-engineer",
-    ]
+    assert (
+        ids_a
+        == ids_b
+        == [
+            "backend-developer",
+            "data-scientist",
+            "devops-engineer",
+        ]
+    )
 
 
 def test_job_repo_disambiguates_title_collisions_in_load_order():
@@ -201,7 +202,7 @@ def _make_analysis_record() -> AnalysisRecord:
         job_id="job-1",
         gap=gap,
         categorization=cat,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -222,19 +223,49 @@ def test_analysis_repo_round_trip():
 
 def _build_roadmap_record() -> tuple[RoadmapRecord, str, str]:
     """Build a RoadmapRecord with 2 phases × 2 resources. Return rec + two rids."""
-    r1 = LearningResource(name="A", skill="Python", resource_type="course",
-                          estimated_hours=1, url="u", completed=False, id="res-1")
-    r2 = LearningResource(name="B", skill="SQL", resource_type="course",
-                          estimated_hours=1, url="u", completed=False, id="res-2")
-    r3 = LearningResource(name="C", skill="Docker", resource_type="course",
-                          estimated_hours=1, url="u", completed=False, id="res-3")
-    r4 = LearningResource(name="D", skill="AWS", resource_type="course",
-                          estimated_hours=1, url="u", completed=False, id="res-4")
+    r1 = LearningResource(
+        name="A",
+        skill="Python",
+        resource_type="course",
+        estimated_hours=1,
+        url="u",
+        completed=False,
+        id="res-1",
+    )
+    r2 = LearningResource(
+        name="B",
+        skill="SQL",
+        resource_type="course",
+        estimated_hours=1,
+        url="u",
+        completed=False,
+        id="res-2",
+    )
+    r3 = LearningResource(
+        name="C",
+        skill="Docker",
+        resource_type="course",
+        estimated_hours=1,
+        url="u",
+        completed=False,
+        id="res-3",
+    )
+    r4 = LearningResource(
+        name="D",
+        skill="AWS",
+        resource_type="course",
+        estimated_hours=1,
+        url="u",
+        completed=False,
+        id="res-4",
+    )
 
-    roadmap = Roadmap(phases=[
-        RoadmapPhase(label="Phase 1", resources=[r1, r2]),
-        RoadmapPhase(label="Phase 2", resources=[r3, r4]),
-    ])
+    roadmap = Roadmap(
+        phases=[
+            RoadmapPhase(label="Phase 1", resources=[r1, r2]),
+            RoadmapPhase(label="Phase 2", resources=[r3, r4]),
+        ]
+    )
     resource_index = {
         "res-1": (0, 0),
         "res-2": (0, 1),

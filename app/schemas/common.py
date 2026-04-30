@@ -16,7 +16,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # Reusable config: reject unknown fields in request payloads (catches
 # typos early) and auto-strip whitespace from string fields. Response
 # models don't need this but inheriting it is harmless.

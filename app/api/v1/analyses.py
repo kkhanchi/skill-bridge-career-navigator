@@ -27,7 +27,7 @@ Requirement reference: R4.1–R4.6, R6.1, R6.4, R9.1, R13.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from flask import Blueprint, jsonify
@@ -49,7 +49,6 @@ from app.utils.errors import (
     ApiError,
 )
 from app.utils.validation import validate_body
-
 
 bp = Blueprint("analyses", __name__)
 
@@ -83,9 +82,7 @@ def create_analysis_handler(*, body: AnalysisCreate, current_user: UserRecord):
 
     # Ownership-filtered profile lookup. A profile owned by a different
     # user looks identical to a missing id — 404 PROFILE_NOT_FOUND.
-    profile_record = ext.profile_repo.get_for_user(
-        body.profile_id, current_user.id
-    )
+    profile_record = ext.profile_repo.get_for_user(body.profile_id, current_user.id)
     if profile_record is None:
         raise ApiError(PROFILE_NOT_FOUND, "Profile not found", status=404)
 
@@ -109,7 +106,7 @@ def create_analysis_handler(*, body: AnalysisCreate, current_user: UserRecord):
         job_id=body.job_id,
         gap=gap,
         categorization=categorization,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     stored = ext.analysis_repo.create_for_user(current_user.id, record)
     return jsonify(_serialize(stored)), 201

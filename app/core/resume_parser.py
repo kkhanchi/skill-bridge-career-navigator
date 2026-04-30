@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 
 def load_taxonomy(path: str = "data/skill_taxonomy.json") -> list[str]:
@@ -12,7 +11,7 @@ def load_taxonomy(path: str = "data/skill_taxonomy.json") -> list[str]:
 
     Returns a list of skill strings (≥50 entries expected).
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

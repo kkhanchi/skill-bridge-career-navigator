@@ -14,7 +14,7 @@ Requirement reference: R12.5, R12.6.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.repositories.base import RefreshTokenRecord
@@ -43,7 +43,7 @@ class InMemoryRefreshTokenRepository:
             jti=jti,
             expires_at=expires_at,
             revoked_at=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         with self._lock:
             self._by_jti[jti] = record
@@ -70,7 +70,7 @@ class InMemoryRefreshTokenRepository:
                 user_id=record.user_id,
                 jti=record.jti,
                 expires_at=record.expires_at,
-                revoked_at=datetime.now(timezone.utc),
+                revoked_at=datetime.now(UTC),
                 created_at=record.created_at,
             )
             return True

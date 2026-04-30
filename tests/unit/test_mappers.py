@@ -10,7 +10,7 @@ Requirement reference: R2.2, R7.4.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.gap_analyzer import analyze_gap
 from app.core.models import (
@@ -23,7 +23,7 @@ from app.core.models import (
     UserProfile,
 )
 from app.core.roadmap_generator import generate_roadmap
-from app.db.models import AnalysisORM, JobORM, ProfileORM, RoadmapORM
+from app.db.models import AnalysisORM, ProfileORM
 from app.repositories._mappers import (
     _build_resource_index,
     analysis_record_from_row,
@@ -42,7 +42,6 @@ from app.repositories.base import (
     RoadmapRecord,
 )
 
-
 # ---------------------------------------------------------------------------
 # ProfileRecord <-> ProfileORM
 # ---------------------------------------------------------------------------
@@ -58,8 +57,8 @@ def test_profile_record_round_trip():
             education="Bachelor's",
             target_role="Backend Developer",
         ),
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
 
     row = profile_row_from_record(original)
@@ -72,11 +71,16 @@ def test_profile_record_round_trip():
 
 
 def test_profile_mapper_preserves_timezone_awareness():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     row = ProfileORM(
-        id="p-1", name="X", skills=["Python"], experience_years=1,
-        education="", target_role="R",
-        created_at=now, updated_at=now,
+        id="p-1",
+        name="X",
+        skills=["Python"],
+        experience_years=1,
+        education="",
+        target_role="R",
+        created_at=now,
+        updated_at=now,
     )
     record = profile_record_from_row(row)
 
@@ -132,7 +136,7 @@ def test_analysis_record_round_trip():
         job_id="backend-developer",
         gap=gap,
         categorization=categorization,
-        created_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 3, tzinfo=UTC),
     )
 
     row = analysis_row_from_record(original)
@@ -175,18 +179,24 @@ def test_analysis_mapper_handles_empty_profile_id():
 def _sample_resources() -> list[LearningResource]:
     return [
         LearningResource(
-            name="REST API Course", skill="REST APIs",
-            resource_type="course", estimated_hours=12,
+            name="REST API Course",
+            skill="REST APIs",
+            resource_type="course",
+            estimated_hours=12,
             url="https://example.com/rest",
         ),
         LearningResource(
-            name="Docker Essentials", skill="Docker",
-            resource_type="course", estimated_hours=12,
+            name="Docker Essentials",
+            skill="Docker",
+            resource_type="course",
+            estimated_hours=12,
             url="https://example.com/docker",
         ),
         LearningResource(
-            name="AWS Cloud Practitioner", skill="AWS",
-            resource_type="certification", estimated_hours=25,
+            name="AWS Cloud Practitioner",
+            skill="AWS",
+            resource_type="certification",
+            estimated_hours=25,
             url="https://example.com/aws",
         ),
     ]
@@ -196,11 +206,15 @@ def test_roadmap_mapper_preserves_phases_and_resources():
     # Build a realistic roadmap via generate_roadmap so every resource
     # carries a uuid id matching the real production path.
     profile = UserProfile(
-        name="T", skills=["Python"], experience_years=1,
-        education="BSc", target_role="Backend Developer",
+        name="T",
+        skills=["Python"],
+        experience_years=1,
+        education="BSc",
+        target_role="Backend Developer",
     )
     job = JobPosting(
-        title="Backend Developer", description="Build APIs",
+        title="Backend Developer",
+        description="Build APIs",
         required_skills=["Python", "REST APIs", "Git"],
         preferred_skills=["Docker", "AWS"],
         experience_level="Mid",
@@ -213,21 +227,19 @@ def test_roadmap_mapper_preserves_phases_and_resources():
         analysis_id="a-1",
         roadmap=roadmap,
         resource_index=_build_resource_index(roadmap),
-        created_at=datetime(2026, 1, 4, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 4, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 5, tzinfo=UTC),
     )
 
     row = roadmap_row_from_record(original)
     restored = roadmap_record_from_row(row)
 
     # Phase labels preserved.
-    assert [p.label for p in restored.roadmap.phases] == [
-        p.label for p in original.roadmap.phases
-    ]
+    assert [p.label for p in restored.roadmap.phases] == [p.label for p in original.roadmap.phases]
     # Resources preserved (ids, names, completed flags).
-    for orig_phase, new_phase in zip(original.roadmap.phases, restored.roadmap.phases):
+    for orig_phase, new_phase in zip(original.roadmap.phases, restored.roadmap.phases, strict=True):
         assert len(new_phase.resources) == len(orig_phase.resources)
-        for orig_res, new_res in zip(orig_phase.resources, new_phase.resources):
+        for orig_res, new_res in zip(orig_phase.resources, new_phase.resources, strict=True):
             assert new_res.id == orig_res.id
             assert new_res.name == orig_res.name
             assert new_res.skill == orig_res.skill
@@ -239,11 +251,15 @@ def test_roadmap_mapper_rebuilds_resource_index_equivalent_to_generator():
     # MUST match what _build_resource_index produces directly on the
     # roadmap. This is the contract the PATCH handler depends on.
     profile = UserProfile(
-        name="T", skills=[], experience_years=0,
-        education="", target_role="Backend Developer",
+        name="T",
+        skills=[],
+        experience_years=0,
+        education="",
+        target_role="Backend Developer",
     )
     job = JobPosting(
-        title="Backend Developer", description="d",
+        title="Backend Developer",
+        description="d",
         required_skills=["Python", "SQL", "REST APIs"],
         preferred_skills=["Docker"],
         experience_level="Mid",
@@ -252,7 +268,9 @@ def test_roadmap_mapper_rebuilds_resource_index_equivalent_to_generator():
     roadmap = generate_roadmap(gap, _sample_resources())
 
     rec = RoadmapRecord(
-        id="r-1", analysis_id="a-1", roadmap=roadmap,
+        id="r-1",
+        analysis_id="a-1",
+        roadmap=roadmap,
         resource_index=_build_resource_index(roadmap),
     )
 
@@ -269,20 +287,32 @@ def test_roadmap_mapper_rebuilds_resource_index_equivalent_to_generator():
 def test_build_resource_index_skips_resources_without_ids():
     # Defensive: resources without ids (legacy data) don't crash the
     # mapper; they just don't appear in the index.
-    roadmap = Roadmap(phases=[
-        RoadmapPhase(label="Phase 1", resources=[
-            LearningResource(
-                name="Legacy", skill="Python", resource_type="course",
-                estimated_hours=5, url="https://example.com",
-                completed=False,  # id defaults to ""
+    roadmap = Roadmap(
+        phases=[
+            RoadmapPhase(
+                label="Phase 1",
+                resources=[
+                    LearningResource(
+                        name="Legacy",
+                        skill="Python",
+                        resource_type="course",
+                        estimated_hours=5,
+                        url="https://example.com",
+                        completed=False,  # id defaults to ""
+                    ),
+                    LearningResource(
+                        name="Modern",
+                        skill="SQL",
+                        resource_type="course",
+                        estimated_hours=5,
+                        url="https://example.com",
+                        completed=False,
+                        id="keeps-id",
+                    ),
+                ],
             ),
-            LearningResource(
-                name="Modern", skill="SQL", resource_type="course",
-                estimated_hours=5, url="https://example.com",
-                completed=False, id="keeps-id",
-            ),
-        ]),
-    ])
+        ]
+    )
 
     index = _build_resource_index(roadmap)
     assert list(index.keys()) == ["keeps-id"]

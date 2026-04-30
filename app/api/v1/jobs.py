@@ -21,7 +21,6 @@ from app.schemas.job import JobListQuery, JobListResponse, JobResponse
 from app.utils.errors import JOB_NOT_FOUND, ApiError
 from app.utils.validation import validate_query
 
-
 bp = Blueprint("jobs", __name__)
 
 

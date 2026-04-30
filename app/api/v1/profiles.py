@@ -24,9 +24,9 @@ from __future__ import annotations
 from flask import Blueprint, jsonify
 
 from app.auth.decorator import require_auth
+from app.core.models import UserProfile
 from app.core.profile_manager import create_profile as core_create_profile
 from app.core.profile_manager import update_profile as core_update_profile
-from app.core.models import UserProfile
 from app.extensions import get_ext
 from app.repositories.base import ProfileRecord, UserRecord
 from app.schemas.profile import ProfileCreate, ProfileResponse, ProfileUpdate
@@ -36,7 +36,6 @@ from app.utils.errors import (
     ApiError,
 )
 from app.utils.validation import validate_body
-
 
 bp = Blueprint("profiles", __name__)
 
@@ -68,9 +67,7 @@ def _serialize(record: ProfileRecord) -> dict:
 @bp.post("")
 @require_auth
 @validate_body(ProfileCreate)
-def create_profile_handler(
-    *, body: ProfileCreate, current_user: UserRecord
-):
+def create_profile_handler(*, body: ProfileCreate, current_user: UserRecord):
     """``POST /api/v1/profiles`` — create a profile, return 201.
 
     Stamped with ``current_user.id`` so only the creator can read or
@@ -108,9 +105,7 @@ def get_profile_handler(profile_id: str, *, current_user: UserRecord):
 @bp.patch("/<profile_id>")
 @require_auth
 @validate_body(ProfileUpdate)
-def patch_profile_handler(
-    profile_id: str, *, body: ProfileUpdate, current_user: UserRecord
-):
+def patch_profile_handler(profile_id: str, *, body: ProfileUpdate, current_user: UserRecord):
     """``PATCH /api/v1/profiles/{id}`` — apply partial updates, return 200."""
     repo = get_ext().profile_repo
     existing = repo.get_for_user(profile_id, current_user.id)
@@ -132,16 +127,10 @@ def patch_profile_handler(
         name=body.name if body.name is not None else working.name,
         skills=working.skills,
         experience_years=(
-            body.experience_years
-            if body.experience_years is not None
-            else working.experience_years
+            body.experience_years if body.experience_years is not None else working.experience_years
         ),
-        education=(
-            body.education if body.education is not None else working.education
-        ),
-        target_role=(
-            body.target_role if body.target_role is not None else working.target_role
-        ),
+        education=(body.education if body.education is not None else working.education),
+        target_role=(body.target_role if body.target_role is not None else working.target_role),
     )
 
     updated = repo.update_for_user(profile_id, current_user.id, working)

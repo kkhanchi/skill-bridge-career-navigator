@@ -14,7 +14,7 @@ Requirement reference: R8.8.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis.strategies import text
@@ -22,16 +22,14 @@ from hypothesis.strategies import text
 from app import create_app
 from app.auth.tokens import decode_token, encode_access_token
 
-
 _PROPERTY_SETTINGS = settings(
     max_examples=20,
     deadline=None,
     suppress_health_check=[HealthCheck.function_scoped_fixture, HealthCheck.too_slow],
 )
 
-_password_strategy = (
-    text(min_size=8, max_size=40)
-    .filter(lambda s: len(s.strip()) >= 8 and len(s) <= 128)
+_password_strategy = text(min_size=8, max_size=40).filter(
+    lambda s: len(s.strip()) >= 8 and len(s) <= 128
 )
 
 
@@ -72,11 +70,9 @@ def test_access_token_issued_in_past_rejects_on_me(password):
     user_id = register.get_json()["user"]["id"]
 
     with app.app_context():
-        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        past = datetime.now(UTC) - timedelta(hours=1)
         expired = encode_access_token(user_id, now=past)
 
-    response = client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"}
-    )
+    response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_EXPIRED"

@@ -9,7 +9,7 @@ Requirement reference: R8.1, R8.2, R8.3, R8.6, R8.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
@@ -23,7 +23,6 @@ from app.auth.tokens import (
     encode_access_token,
     encode_refresh_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Round-trip
@@ -80,7 +79,7 @@ def test_refresh_token_exp_is_near_ttl_window(app):
 def test_expired_access_token_raises_token_expired(app):
     with app.app_context():
         # Push "now" far enough into the past that exp < real wall-clock.
-        in_the_past = datetime.now(timezone.utc) - timedelta(hours=2)
+        in_the_past = datetime.now(UTC) - timedelta(hours=2)
         token = encode_access_token("uid-1", now=in_the_past)
         with pytest.raises(AuthError) as ei:
             decode_token(token, expected_type="access")
@@ -89,7 +88,7 @@ def test_expired_access_token_raises_token_expired(app):
 
 def test_expired_refresh_token_raises_token_expired(app):
     with app.app_context():
-        in_the_past = datetime.now(timezone.utc) - timedelta(days=30)
+        in_the_past = datetime.now(UTC) - timedelta(days=30)
         token, _, _ = encode_refresh_token("uid-1", now=in_the_past)
         with pytest.raises(AuthError) as ei:
             decode_token(token, expected_type="refresh")
@@ -113,16 +112,14 @@ def test_wrong_secret_raises_token_invalid(app):
         "type": "access",
     }
     forged = jwt.encode(claims, "some-other-secret", algorithm="HS256")
-    with app.app_context():
-        with pytest.raises(AuthError) as ei:
-            decode_token(forged, expected_type="access")
+    with app.app_context(), pytest.raises(AuthError) as ei:
+        decode_token(forged, expected_type="access")
     assert ei.value.code == "TOKEN_INVALID"
 
 
 def test_malformed_token_string_raises_token_invalid(app):
-    with app.app_context():
-        with pytest.raises(AuthError) as ei:
-            decode_token("not.a.jwt", expected_type="access")
+    with app.app_context(), pytest.raises(AuthError) as ei:
+        decode_token("not.a.jwt", expected_type="access")
     assert ei.value.code == "TOKEN_INVALID"
 
 

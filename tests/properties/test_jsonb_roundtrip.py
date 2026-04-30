@@ -44,9 +44,7 @@ def test_skills_json_round_trip(skills):
         # Write in one session. Phase 3 requires profiles.user_id NOT
         # NULL, so we seed a user first to satisfy the FK.
         with Session(engine) as session:
-            session.add(
-                UserORM(id=user_id, email=f"{user_id}@example.com", password_hash="x")
-            )
+            session.add(UserORM(id=user_id, email=f"{user_id}@example.com", password_hash="x"))
             session.add(
                 ProfileORM(
                     id=profile_id,

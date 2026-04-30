@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import copy
 import json
-from pathlib import Path
 from uuid import uuid4
 
 from .models import (
@@ -21,7 +19,7 @@ _PHASE_LABELS = ["Month 1-2", "Month 3-4", "Month 5-6"]
 
 def _load_resources(path: str = "data/learning_resources.json") -> list[LearningResource]:
     """Load learning resources from JSON."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     return [
         LearningResource(
@@ -152,25 +150,29 @@ def mark_completed_by_id(roadmap: Roadmap, resource_id: str) -> Roadmap:
         for r in phase.resources:
             if r.id == resource_id:
                 found = True
-                new_resources.append(LearningResource(
-                    name=r.name,
-                    skill=r.skill,
-                    resource_type=r.resource_type,
-                    estimated_hours=r.estimated_hours,
-                    url=r.url,
-                    completed=True,
-                    id=r.id,
-                ))
+                new_resources.append(
+                    LearningResource(
+                        name=r.name,
+                        skill=r.skill,
+                        resource_type=r.resource_type,
+                        estimated_hours=r.estimated_hours,
+                        url=r.url,
+                        completed=True,
+                        id=r.id,
+                    )
+                )
             else:
-                new_resources.append(LearningResource(
-                    name=r.name,
-                    skill=r.skill,
-                    resource_type=r.resource_type,
-                    estimated_hours=r.estimated_hours,
-                    url=r.url,
-                    completed=r.completed,
-                    id=r.id,
-                ))
+                new_resources.append(
+                    LearningResource(
+                        name=r.name,
+                        skill=r.skill,
+                        resource_type=r.resource_type,
+                        estimated_hours=r.estimated_hours,
+                        url=r.url,
+                        completed=r.completed,
+                        id=r.id,
+                    )
+                )
         new_phases.append(RoadmapPhase(label=phase.label, resources=new_resources))
     if not found:
         raise KeyError(f"No resource with id {resource_id!r} in roadmap")

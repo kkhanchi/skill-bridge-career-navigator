@@ -25,11 +25,11 @@ from __future__ import annotations
 from math import ceil
 
 import pytest
-from hypothesis import HealthCheck, given, settings, strategies as st
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from app import create_app
 from app.auth.tokens import encode_access_token
-
 
 VALID_ERROR_CODES = {
     "VALIDATION_FAILED",
@@ -129,9 +129,7 @@ PROPERTY_SETTINGS = settings(
 # Skills drawn from a small alphabet so duplicates (and thus dedup) are
 # meaningful, but every string is a valid non-empty skill token.
 _skill_strategy = st.text(
-    alphabet=st.characters(
-        whitelist_categories=("L", "N"), whitelist_characters=" -/"
-    ),
+    alphabet=st.characters(whitelist_categories=("L", "N"), whitelist_characters=" -/"),
     min_size=1,
     max_size=30,
 ).filter(lambda s: s.strip() != "" and len(s.strip()) <= 100)
@@ -158,9 +156,7 @@ def valid_profile_payload(draw) -> dict:
         skills = ["Python"]
     experience_years = draw(st.integers(min_value=0, max_value=80))
     education = draw(st.text(min_size=0, max_size=200))
-    target_role = draw(
-        st.text(min_size=1, max_size=200).filter(lambda s: s.strip() != "")
-    )
+    target_role = draw(st.text(min_size=1, max_size=200).filter(lambda s: s.strip() != ""))
     return {
         "name": name,
         "skills": skills,
@@ -193,8 +189,9 @@ def test_profile_round_trip_property(payload):
     fetched = get_response.get_json()
 
     ignored = {"created_at", "updated_at"}
-    assert {k: v for k, v in created.items() if k not in ignored} == \
-           {k: v for k, v in fetched.items() if k not in ignored}
+    assert {k: v for k, v in created.items() if k not in ignored} == {
+        k: v for k, v in fetched.items() if k not in ignored
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +227,7 @@ def test_pagination_partition_property(keyword, skill, limit):
     client = _fresh_client()
 
     # Reference: the full filtered list via a single large-limit call.
-    ref_response = client.get(
-        f"/api/v1/jobs?keyword={keyword}&skill={skill}&limit=100&page=1"
-    )
+    ref_response = client.get(f"/api/v1/jobs?keyword={keyword}&skill={skill}&limit=100&page=1")
     assert ref_response.status_code == 200
     reference_items = ref_response.get_json()["items"]
     expected_total = len(reference_items)
@@ -257,9 +252,7 @@ def test_pagination_partition_property(keyword, skill, limit):
     assert totals_seen == {expected_total}
 
     # Concatenation equals reference (order preserved).
-    assert [item["id"] for item in concatenated] == [
-        item["id"] for item in reference_items
-    ]
+    assert [item["id"] for item in concatenated] == [item["id"] for item in reference_items]
 
     # No duplicates across pages.
     ids = [item["id"] for item in concatenated]
@@ -386,21 +379,26 @@ def test_completion_monotonicity_property(payload):
     )
 
     def to_domain(body):
-        return Roadmap(phases=[
-            RoadmapPhase(
-                label=phase["label"],
-                resources=[
-                    LearningResource(
-                        name=r["name"], skill=r["skill"],
-                        resource_type=r["resource_type"],
-                        estimated_hours=r["estimated_hours"], url=r["url"],
-                        completed=r["completed"], id=r["id"],
-                    )
-                    for r in phase["resources"]
-                ],
-            )
-            for phase in body["phases"]
-        ])
+        return Roadmap(
+            phases=[
+                RoadmapPhase(
+                    label=phase["label"],
+                    resources=[
+                        LearningResource(
+                            name=r["name"],
+                            skill=r["skill"],
+                            resource_type=r["resource_type"],
+                            estimated_hours=r["estimated_hours"],
+                            url=r["url"],
+                            completed=r["completed"],
+                            id=r["id"],
+                        )
+                        for r in phase["resources"]
+                    ],
+                )
+                for phase in body["phases"]
+            ]
+        )
 
     before = recalculate_match(profile, job, to_domain(roadmap))
 
@@ -440,13 +438,15 @@ _malformed_body_strategy = st.dictionaries(
     _arbitrary_json_value,
     max_size=5,
 )
-_write_endpoints = st.sampled_from([
-    ("POST", "/api/v1/profiles"),
-    ("PATCH", "/api/v1/profiles/some-random-id"),
-    ("POST", "/api/v1/resume/parse"),
-    ("POST", "/api/v1/analyses"),
-    ("POST", "/api/v1/roadmaps"),
-])
+_write_endpoints = st.sampled_from(
+    [
+        ("POST", "/api/v1/profiles"),
+        ("PATCH", "/api/v1/profiles/some-random-id"),
+        ("POST", "/api/v1/resume/parse"),
+        ("POST", "/api/v1/analyses"),
+        ("POST", "/api/v1/roadmaps"),
+    ]
+)
 
 
 @PROPERTY_SETTINGS

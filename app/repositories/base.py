@@ -16,7 +16,7 @@ Requirement reference: R11.1, R11.2.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from app.core.models import (
@@ -26,7 +26,6 @@ from app.core.models import (
     Roadmap,
     UserProfile,
 )
-
 
 # ---------------------------------------------------------------------------
 # Record wrappers
@@ -76,8 +75,8 @@ class RoadmapRecord:
     analysis_id: str
     roadmap: Roadmap
     resource_index: dict[str, tuple[int, int]] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -135,12 +134,8 @@ class ProfileRepository(Protocol):
     # the lookup/mutation to rows owned by that user. Phase 1 tests
     # continue to use the unscoped variants; Phase 3 handlers call
     # only the ``_for_user`` variants.
-    def create_for_user(
-        self, user_id: str, profile: UserProfile
-    ) -> ProfileRecord: ...
-    def get_for_user(
-        self, profile_id: str, user_id: str
-    ) -> ProfileRecord | None: ...
+    def create_for_user(self, user_id: str, profile: UserProfile) -> ProfileRecord: ...
+    def get_for_user(self, profile_id: str, user_id: str) -> ProfileRecord | None: ...
     def update_for_user(
         self, profile_id: str, user_id: str, profile: UserProfile
     ) -> ProfileRecord | None: ...
@@ -165,12 +160,8 @@ class AnalysisRepository(Protocol):
     def get(self, analysis_id: str) -> AnalysisRecord | None: ...
 
     # ---- Phase 3 multi-tenant variants ----
-    def create_for_user(
-        self, user_id: str, record: AnalysisRecord
-    ) -> AnalysisRecord: ...
-    def get_for_user(
-        self, analysis_id: str, user_id: str
-    ) -> AnalysisRecord | None: ...
+    def create_for_user(self, user_id: str, record: AnalysisRecord) -> AnalysisRecord: ...
+    def get_for_user(self, analysis_id: str, user_id: str) -> AnalysisRecord | None: ...
 
 
 class RoadmapRepository(Protocol):
@@ -191,12 +182,8 @@ class RoadmapRepository(Protocol):
         ...
 
     # ---- Phase 3 multi-tenant variants ----
-    def create_for_user(
-        self, user_id: str, record: RoadmapRecord
-    ) -> RoadmapRecord: ...
-    def get_for_user(
-        self, roadmap_id: str, user_id: str
-    ) -> RoadmapRecord | None: ...
+    def create_for_user(self, user_id: str, record: RoadmapRecord) -> RoadmapRecord: ...
+    def get_for_user(self, roadmap_id: str, user_id: str) -> RoadmapRecord | None: ...
     def update_resource_for_user(
         self,
         roadmap_id: str,
@@ -229,9 +216,7 @@ class UserRepository(Protocol):
 class RefreshTokenRepository(Protocol):
     """Persistence for refresh-token grants."""
 
-    def create(
-        self, *, user_id: str, jti: str, expires_at: datetime
-    ) -> RefreshTokenRecord: ...
+    def create(self, *, user_id: str, jti: str, expires_at: datetime) -> RefreshTokenRecord: ...
     def get_by_jti(self, jti: str) -> RefreshTokenRecord | None: ...
     def revoke(self, jti: str) -> bool:
         """Mark the token revoked.

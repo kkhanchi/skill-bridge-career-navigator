@@ -22,7 +22,6 @@ from app.core.job_catalog import search_jobs
 from app.core.models import JobPosting
 from app.repositories.base import JobRecord
 
-
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 
 

@@ -12,7 +12,7 @@ Requirement reference: R2.1, R2.2, R2.3, R2.5.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -44,16 +44,14 @@ class SqlAlchemyProfileRepository:
             "Phase 3 migration 0002; use create_for_user(user_id, profile)"
         )
 
-    def _create_impl(
-        self, user_id: str, profile: UserProfile
-    ) -> ProfileRecord:
+    def _create_impl(self, user_id: str, profile: UserProfile) -> ProfileRecord:
         """Shared implementation used by ``create_for_user`` (Stage H).
 
         Kept as a private method so the Phase 1/2 ``create`` signature
         can raise while the real insert lives in one place.
         """
         session = get_db_session()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         row = ProfileORM(
             id=uuid4().hex,
             user_id=user_id,
@@ -87,7 +85,7 @@ class SqlAlchemyProfileRepository:
         # updated_at is auto-refreshed by `onupdate=func.now()`, but we
         # set it explicitly so the returned record carries the new
         # timestamp without needing a re-read.
-        row.updated_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(UTC)
         session.flush()
         return profile_record_from_row(row)
 
@@ -102,15 +100,11 @@ class SqlAlchemyProfileRepository:
 
     # ---- Phase 3 multi-tenant methods ----------------------------------
 
-    def create_for_user(
-        self, user_id: str, profile: UserProfile
-    ) -> ProfileRecord:
+    def create_for_user(self, user_id: str, profile: UserProfile) -> ProfileRecord:
         """Create a profile stamped with ``user_id`` (Phase 3 replacement for create)."""
         return self._create_impl(user_id, profile)
 
-    def get_for_user(
-        self, profile_id: str, user_id: str
-    ) -> ProfileRecord | None:
+    def get_for_user(self, profile_id: str, user_id: str) -> ProfileRecord | None:
         """Fetch only if owned by ``user_id``.
 
         Anti-enumeration (R12.7): rows owned by another user never
@@ -141,7 +135,7 @@ class SqlAlchemyProfileRepository:
         row.experience_years = profile.experience_years
         row.education = profile.education
         row.target_role = profile.target_role
-        row.updated_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(UTC)
         session.flush()
         return profile_record_from_row(row)
 

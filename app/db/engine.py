@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from sqlalchemy import Engine, create_engine
 
-
 _SUPPORTED_SCHEMES = ("sqlite", "postgresql")
 
 
@@ -54,8 +53,7 @@ def build_engine(database_url: str, *, echo: bool = False) -> Engine:
     scheme = database_url.split(":", 1)[0].split("+", 1)[0]
     if scheme not in _SUPPORTED_SCHEMES:
         raise ValueError(
-            f"Unsupported DATABASE_URL scheme {scheme!r}; "
-            f"expected one of {_SUPPORTED_SCHEMES}"
+            f"Unsupported DATABASE_URL scheme {scheme!r}; expected one of {_SUPPORTED_SCHEMES}"
         )
 
     if scheme == "sqlite":
@@ -72,7 +70,7 @@ def build_engine(database_url: str, *, echo: bool = False) -> Engine:
     # psycopg2 or asyncpg via the ``postgresql+<driver>://...`` form
     # pass through untouched.
     if database_url.startswith("postgresql://"):
-        database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
+        database_url = "postgresql+psycopg://" + database_url[len("postgresql://") :]
 
     # ``pool_pre_ping=True`` makes the pool validate a connection
     # before handing it to a caller — cheap for a long-running web

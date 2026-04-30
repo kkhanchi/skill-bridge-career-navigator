@@ -36,7 +36,6 @@ from app.utils.errors import (
     ApiError,
 )
 
-
 _BEARER_PREFIX = "Bearer "
 
 

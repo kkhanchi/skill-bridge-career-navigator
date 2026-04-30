@@ -16,11 +16,12 @@ Requirement reference: R2.1, R2.2, R7.1, R7.2, R7.3, R7.5.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.db.models import RoadmapORM
+from app.db.models import AnalysisORM, RoadmapORM
 from app.db.session import get_db_session
 from app.repositories._mappers import (
     roadmap_record_from_row,
@@ -88,7 +89,7 @@ class SqlAlchemyRoadmapRepository:
         # R7.1 + R7.2: mandatory flag_modified call, plus explicit
         # updated_at bump so the returned record reflects the mutation.
         flag_modified(row, "phases")
-        row.updated_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(UTC)
         session.flush()
 
         return roadmap_record_from_row(row)
@@ -102,10 +103,6 @@ class SqlAlchemyRoadmapRepository:
 # carried by the roadmap's parent analysis. ``get_for_user`` JOINs
 # through to ``analyses.user_id`` so the query returns rows only when
 # the caller owns the originating analysis.
-
-from sqlalchemy import select as _select
-
-from app.db.models import AnalysisORM as _AnalysisORM
 
 
 def _create_for_user(self, user_id, record):
@@ -128,18 +125,14 @@ def _get_for_user(self, roadmap_id, user_id):
     """
     session = get_db_session()
     row = session.scalar(
-        _select(RoadmapORM)
-        .join(_AnalysisORM, RoadmapORM.analysis_id == _AnalysisORM.id)
-        .where(
-            (RoadmapORM.id == roadmap_id) & (_AnalysisORM.user_id == user_id)
-        )
+        select(RoadmapORM)
+        .join(AnalysisORM, RoadmapORM.analysis_id == AnalysisORM.id)
+        .where((RoadmapORM.id == roadmap_id) & (AnalysisORM.user_id == user_id))
     )
     return roadmap_record_from_row(row) if row is not None else None
 
 
-def _update_resource_for_user(
-    self, roadmap_id, resource_id, user_id, completed
-):
+def _update_resource_for_user(self, roadmap_id, resource_id, user_id, completed):
     """Update a resource only if the owning analysis belongs to ``user_id``.
 
     Ownership gate first; the mutation then reuses ``update_resource``

@@ -14,12 +14,9 @@ Requirement reference: R3, R3.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from app.auth.tokens import encode_access_token, encode_refresh_token
-
+from app.auth.tokens import encode_refresh_token
 
 _PASSWORD = "correct horse battery staple"
 
@@ -84,9 +81,7 @@ def test_refresh_chain_produces_working_tokens(client):
     current_refresh = tokens["refresh"]
 
     for _ in range(3):
-        response = client.post(
-            "/api/v1/auth/refresh", json={"refresh": current_refresh}
-        )
+        response = client.post("/api/v1/auth/refresh", json={"refresh": current_refresh})
         assert response.status_code == 200
         body = response.get_json()
         # Each minted access token is usable on /me.
@@ -115,9 +110,7 @@ def test_refresh_with_access_token_is_token_invalid(client):
 
 
 def test_refresh_with_malformed_token_is_token_invalid(client):
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh": "not.a.jwt"}
-    )
+    response = client.post("/api/v1/auth/refresh", json={"refresh": "not.a.jwt"})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
@@ -135,12 +128,10 @@ def test_refresh_with_expired_token_is_token_expired(app, client):
     user_id = tokens["user"]["id"]
 
     with app.app_context():
-        in_the_past = datetime.now(timezone.utc) - timedelta(days=30)
+        in_the_past = datetime.now(UTC) - timedelta(days=30)
         expired_refresh, _, _ = encode_refresh_token(user_id, now=in_the_past)
 
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh": expired_refresh}
-    )
+    response = client.post("/api/v1/auth/refresh", json={"refresh": expired_refresh})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_EXPIRED"
 
@@ -172,17 +163,13 @@ def test_refresh_rate_limits_after_30_requests(client):
     # runs before body validation, so 30 malformed requests also
     # burn the quota. Saves test time versus minting 30 valid chains.
     for _ in range(30):
-        response = client.post(
-            "/api/v1/auth/refresh", json={"refresh": "not.a.jwt"}
-        )
+        response = client.post("/api/v1/auth/refresh", json={"refresh": "not.a.jwt"})
         # Each individual request is either 401 TOKEN_INVALID (bad
         # token passes through body validation) — it's the count that
         # matters, not the per-request outcome.
         assert response.status_code in (400, 401)
 
     # 31st hits the limit.
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh": "not.a.jwt"}
-    )
+    response = client.post("/api/v1/auth/refresh", json={"refresh": "not.a.jwt"})
     assert response.status_code == 429
     assert response.get_json()["error"]["code"] == "RATE_LIMITED"

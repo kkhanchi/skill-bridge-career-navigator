@@ -22,7 +22,6 @@ from hypothesis.strategies import text
 
 from app import create_app
 
-
 _PROPERTY_SETTINGS = settings(
     max_examples=20,
     deadline=None,
@@ -35,9 +34,8 @@ _PROPERTY_SETTINGS = settings(
 # least 8 chars remaining. Without the post-strip filter, Hypothesis
 # finds passwords like "0000000\r" — 8 chars literal, 7 after strip,
 # which fails the schema's min_length=8 check.
-_password_strategy = (
-    text(min_size=8, max_size=40)
-    .filter(lambda s: len(s.strip()) >= 8 and len(s) <= 128)
+_password_strategy = text(min_size=8, max_size=40).filter(
+    lambda s: len(s.strip()) >= 8 and len(s) <= 128
 )
 
 
@@ -60,21 +58,15 @@ def test_refresh_old_token_dead_new_token_live(password):
     original_refresh = register.get_json()["refresh"]
 
     # Rotate once.
-    rotated = client.post(
-        "/api/v1/auth/refresh", json={"refresh": original_refresh}
-    )
+    rotated = client.post("/api/v1/auth/refresh", json={"refresh": original_refresh})
     assert rotated.status_code == 200
     new_refresh = rotated.get_json()["refresh"]
 
     # Old token is now revoked — one-shot property.
-    replay = client.post(
-        "/api/v1/auth/refresh", json={"refresh": original_refresh}
-    )
+    replay = client.post("/api/v1/auth/refresh", json={"refresh": original_refresh})
     assert replay.status_code == 401
     assert replay.get_json()["error"]["code"] == "TOKEN_INVALID"
 
     # New token works for one more rotation.
-    next_rotation = client.post(
-        "/api/v1/auth/refresh", json={"refresh": new_refresh}
-    )
+    next_rotation = client.post("/api/v1/auth/refresh", json={"refresh": new_refresh})
     assert next_rotation.status_code == 200

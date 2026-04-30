@@ -16,7 +16,6 @@ Requirement reference: R4, R4.4, R4.5.
 
 from __future__ import annotations
 
-
 _PASSWORD = "correct horse battery staple"
 
 
@@ -37,9 +36,7 @@ def _register(client):
 def test_logout_with_valid_refresh_returns_204(client):
     tokens = _register(client)
 
-    response = client.post(
-        "/api/v1/auth/logout", json={"refresh": tokens["refresh"]}
-    )
+    response = client.post("/api/v1/auth/logout", json={"refresh": tokens["refresh"]})
     assert response.status_code == 204
     # 204 No Content: body is empty. Flask's test client returns b"".
     assert response.data == b""
@@ -52,9 +49,7 @@ def test_logout_revokes_the_refresh_token(client):
 
     # Presenting the same refresh to /refresh afterwards returns
     # TOKEN_INVALID — jti is revoked.
-    response = client.post(
-        "/api/v1/auth/refresh", json={"refresh": tokens["refresh"]}
-    )
+    response = client.post("/api/v1/auth/refresh", json={"refresh": tokens["refresh"]})
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "TOKEN_INVALID"
 
@@ -63,23 +58,17 @@ def test_logout_is_idempotent(client):
     """R4.4: calling /logout twice still returns 204 the second time."""
     tokens = _register(client)
 
-    first = client.post(
-        "/api/v1/auth/logout", json={"refresh": tokens["refresh"]}
-    )
+    first = client.post("/api/v1/auth/logout", json={"refresh": tokens["refresh"]})
     assert first.status_code == 204
 
     # Already-revoked refresh -> still 204 (defensive UX).
-    second = client.post(
-        "/api/v1/auth/logout", json={"refresh": tokens["refresh"]}
-    )
+    second = client.post("/api/v1/auth/logout", json={"refresh": tokens["refresh"]})
     assert second.status_code == 204
 
 
 def test_logout_with_malformed_refresh_still_returns_204(client):
     """Malformed token can't be decoded -> nothing to revoke -> 204."""
-    response = client.post(
-        "/api/v1/auth/logout", json={"refresh": "not.a.jwt"}
-    )
+    response = client.post("/api/v1/auth/logout", json={"refresh": "not.a.jwt"})
     assert response.status_code == 204
 
 
@@ -93,9 +82,7 @@ def test_logout_does_not_invalidate_access_token(client):
     tokens = _register(client)
 
     # Log out.
-    logout = client.post(
-        "/api/v1/auth/logout", json={"refresh": tokens["refresh"]}
-    )
+    logout = client.post("/api/v1/auth/logout", json={"refresh": tokens["refresh"]})
     assert logout.status_code == 204
 
     # The pre-logout access token still works on /me — it stays valid

@@ -24,13 +24,11 @@ Requirement reference: R8.1, R8.2, R8.3, R8.6, R8.7.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import jwt
 from flask import current_app
-
 
 _ACCESS = "access"
 _REFRESH = "refresh"
@@ -65,7 +63,7 @@ class AuthError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def _now_utc(now: Optional[datetime]) -> datetime:
+def _now_utc(now: datetime | None) -> datetime:
     """Resolve the effective "now" timestamp.
 
     Tests pass a frozen datetime to exercise expiry boundaries
@@ -73,7 +71,7 @@ def _now_utc(now: Optional[datetime]) -> datetime:
     real wall clock. We always work in UTC — mixing naive and aware
     datetimes silently breaks `exp` arithmetic.
     """
-    return now if now is not None else datetime.now(timezone.utc)
+    return now if now is not None else datetime.now(UTC)
 
 
 def _secret() -> str:
@@ -95,7 +93,7 @@ def _secret() -> str:
 def encode_access_token(
     user_id: str,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> str:
     """Return an HS256 JWT with `type="access"` and a 15-minute expiry.
 
@@ -120,7 +118,7 @@ def encode_access_token(
 def encode_refresh_token(
     user_id: str,
     *,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> tuple[str, str, datetime]:
     """Return `(token, jti, expires_at)` for a refresh JWT.
 

@@ -10,7 +10,7 @@ Requirement reference: R12.5, R12.6.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -38,7 +38,7 @@ class SqlAlchemyRefreshTokenRepository:
             jti=jti,
             expires_at=expires_at,
             revoked_at=None,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         session.add(row)
         session.flush()
@@ -46,9 +46,7 @@ class SqlAlchemyRefreshTokenRepository:
 
     def get_by_jti(self, jti: str) -> RefreshTokenRecord | None:
         session = get_db_session()
-        row = session.scalar(
-            select(RefreshTokenORM).where(RefreshTokenORM.jti == jti)
-        )
+        row = session.scalar(select(RefreshTokenORM).where(RefreshTokenORM.jti == jti))
         return refresh_token_record_from_row(row) if row is not None else None
 
     def revoke(self, jti: str) -> bool:
@@ -59,18 +57,14 @@ class SqlAlchemyRefreshTokenRepository:
         already-revoked row both return False without changing state.
         """
         session = get_db_session()
-        row = session.scalar(
-            select(RefreshTokenORM).where(RefreshTokenORM.jti == jti)
-        )
+        row = session.scalar(select(RefreshTokenORM).where(RefreshTokenORM.jti == jti))
         if row is None or row.revoked_at is not None:
             return False
-        row.revoked_at = datetime.now(timezone.utc)
+        row.revoked_at = datetime.now(UTC)
         session.flush()
         return True
 
     def is_revoked(self, jti: str) -> bool:
         session = get_db_session()
-        row = session.scalar(
-            select(RefreshTokenORM).where(RefreshTokenORM.jti == jti)
-        )
+        row = session.scalar(select(RefreshTokenORM).where(RefreshTokenORM.jti == jti))
         return row is not None and row.revoked_at is not None

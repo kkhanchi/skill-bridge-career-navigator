@@ -42,7 +42,7 @@ class ProfileCreate(BaseModel):
     target_role: str = Field(min_length=1, max_length=200)
 
     @model_validator(mode="after")
-    def _each_skill_has_content(self) -> "ProfileCreate":
+    def _each_skill_has_content(self) -> ProfileCreate:
         for skill in self.skills:
             stripped = skill.strip()
             if not stripped:
@@ -70,7 +70,7 @@ class ProfileUpdate(BaseModel):
     target_role: str | None = Field(default=None, min_length=1, max_length=200)
 
     @model_validator(mode="after")
-    def _requires_at_least_one_field(self) -> "ProfileUpdate":
+    def _requires_at_least_one_field(self) -> ProfileUpdate:
         if all(
             value is None
             for value in (

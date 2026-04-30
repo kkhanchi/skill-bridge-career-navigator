@@ -25,7 +25,6 @@ from app.db.models import JobORM
 from app.repositories.job_repo import InMemoryJobRepository
 from scripts.seed_db import seed_db
 
-
 _PKG_ROOT = Path(__file__).resolve().parents[2]
 _JOBS_PATH = str(_PKG_ROOT / "data" / "jobs.json")
 
@@ -53,9 +52,7 @@ def test_seed_db_produces_same_ids_as_memory_repo(tmp_path_factory, permuted):
     jobs_file.write_text(json.dumps(permuted), encoding="utf-8")
 
     # Memory repo: build from the same file, extract ids.
-    memory_ids = {
-        rec.id for rec in InMemoryJobRepository(load_jobs(str(jobs_file)))._records
-    }
+    memory_ids = {rec.id for rec in InMemoryJobRepository(load_jobs(str(jobs_file)))._records}
 
     # SQL: seed into an in-memory engine, extract ids.
     engine = create_engine("sqlite:///:memory:")
@@ -68,7 +65,5 @@ def test_seed_db_produces_same_ids_as_memory_repo(tmp_path_factory, permuted):
         engine.dispose()
 
     assert sql_ids == memory_ids, (
-        f"slug id sets diverged:\n"
-        f"  memory: {sorted(memory_ids)}\n"
-        f"  sql:    {sorted(sql_ids)}"
+        f"slug id sets diverged:\n  memory: {sorted(memory_ids)}\n  sql:    {sorted(sql_ids)}"
     )

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, jsonify
 
 from app.auth.decorator import require_auth
 from app.auth.tokens import AuthError, decode_token, encode_access_token, encode_refresh_token
@@ -38,7 +38,6 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.utils.errors import (
-    AUTH_REQUIRED,
     EMAIL_TAKEN,
     INVALID_CREDENTIALS,
     TOKEN_INVALID,
@@ -113,7 +112,9 @@ def _issue_tokens(user: UserRecord) -> tuple[str, str]:
     access = encode_access_token(user.id)
     refresh, jti, expires_at = encode_refresh_token(user.id)
     ext.refresh_token_repo.create(
-        user_id=user.id, jti=jti, expires_at=expires_at,
+        user_id=user.id,
+        jti=jti,
+        expires_at=expires_at,
     )
     return access, refresh
 
@@ -173,14 +174,10 @@ def login_handler(*, body: LoginRequest):
         # the response timing matches a real failed-password path.
         # The return value is discarded — we already know the outcome.
         ext.hasher.verify(ext.hasher.dummy_hash, body.password)
-        raise ApiError(
-            INVALID_CREDENTIALS, "Invalid email or password", status=401
-        )
+        raise ApiError(INVALID_CREDENTIALS, "Invalid email or password", status=401)
 
     if not ext.hasher.verify(user.password_hash, body.password):
-        raise ApiError(
-            INVALID_CREDENTIALS, "Invalid email or password", status=401
-        )
+        raise ApiError(INVALID_CREDENTIALS, "Invalid email or password", status=401)
 
     access, refresh = _issue_tokens(user)
     response = TokenPairResponse(

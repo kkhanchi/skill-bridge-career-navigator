@@ -40,12 +40,12 @@ INTERNAL_ERROR = "INTERNAL_ERROR"
 # in Phase 3. Library-internal exceptions (PyJWT, argon2-cffi,
 # flask-limiter) map to these via handlers or the @require_auth decorator
 # before reaching the response.
-AUTH_REQUIRED = "AUTH_REQUIRED"              # no / malformed Authorization header
+AUTH_REQUIRED = "AUTH_REQUIRED"  # no / malformed Authorization header
 INVALID_CREDENTIALS = "INVALID_CREDENTIALS"  # login failed (unknown email OR wrong pw)
-TOKEN_EXPIRED = "TOKEN_EXPIRED"              # JWT exp has passed
-TOKEN_INVALID = "TOKEN_INVALID"              # bad signature/type/claims, or revoked refresh
-EMAIL_TAKEN = "EMAIL_TAKEN"                  # register collided with existing user
-RATE_LIMITED = "RATE_LIMITED"                # flask-limiter rejection
+TOKEN_EXPIRED = "TOKEN_EXPIRED"  # JWT exp has passed
+TOKEN_INVALID = "TOKEN_INVALID"  # bad signature/type/claims, or revoked refresh
+EMAIL_TAKEN = "EMAIL_TAKEN"  # register collided with existing user
+RATE_LIMITED = "RATE_LIMITED"  # flask-limiter rejection
 
 # Mapping Flask HTTPException status codes to our own codes when the
 # framework raises them directly (e.g. unknown route -> 404).
@@ -103,11 +103,13 @@ def register_error_handlers(app: Flask) -> None:
         # is the author of the failure semantics, not a surprise.
         logger.info(
             "api_error",
-            extra={"extra_fields": {
-                "code": err.code,
-                "status": err.status,
-                "cid": _cid(),
-            }},
+            extra={
+                "extra_fields": {
+                    "code": err.code,
+                    "status": err.status,
+                    "cid": _cid(),
+                }
+            },
         )
         return _envelope(err.code, err.message, err.details), err.status
 
@@ -119,7 +121,7 @@ def register_error_handlers(app: Flask) -> None:
         from flask_limiter.errors import RateLimitExceeded
 
         @app.errorhandler(RateLimitExceeded)
-        def _handle_rate_limit(err: "RateLimitExceeded"):  # noqa: F821
+        def _handle_rate_limit(err: RateLimitExceeded):  # noqa: F821
             logger.info(
                 "rate_limited",
                 extra={"extra_fields": {"cid": _cid(), "description": str(err.description)}},

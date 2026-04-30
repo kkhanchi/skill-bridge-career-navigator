@@ -7,9 +7,9 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
-from pathlib import Path
 
 from .models import CategorizationResult
 
@@ -25,6 +25,7 @@ def _get_api_key() -> str:
     # Try Streamlit secrets first (for Streamlit Cloud deployment)
     try:
         import streamlit as st
+
         if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
             key = st.secrets["GROQ_API_KEY"]
             if key and key.strip():
@@ -34,29 +35,70 @@ def _get_api_key() -> str:
     # Fall back to environment variable / .env
     return os.environ.get("GROQ_API_KEY", "").strip()
 
+
 # Keyword-based category mapping for the fallback categorizer
 _CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "Programming Languages": [
-        "python", "java", "javascript", "typescript", "go", "rust", "c++",
-        "c#", "ruby", "php", "swift", "kotlin", "bash",
+        "python",
+        "java",
+        "javascript",
+        "typescript",
+        "go",
+        "rust",
+        "c++",
+        "c#",
+        "ruby",
+        "php",
+        "swift",
+        "kotlin",
+        "bash",
     ],
     "Cloud & Infrastructure": [
-        "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "linux",
-        "jenkins", "github actions", "ci/cd",
+        "aws",
+        "azure",
+        "gcp",
+        "docker",
+        "kubernetes",
+        "terraform",
+        "linux",
+        "jenkins",
+        "github actions",
+        "ci/cd",
     ],
     "Data & ML": [
-        "machine learning", "deep learning", "tensorflow", "pytorch",
-        "scikit-learn", "pandas", "numpy", "data analysis", "tableau",
-        "power bi", "sql", "postgresql", "mongodb", "redis", "kafka",
+        "machine learning",
+        "deep learning",
+        "tensorflow",
+        "pytorch",
+        "scikit-learn",
+        "pandas",
+        "numpy",
+        "data analysis",
+        "tableau",
+        "power bi",
+        "sql",
+        "postgresql",
+        "mongodb",
+        "redis",
+        "kafka",
         "elasticsearch",
     ],
     "DevOps": [
-        "ci/cd", "docker", "kubernetes", "terraform", "jenkins",
+        "ci/cd",
+        "docker",
+        "kubernetes",
+        "terraform",
+        "jenkins",
         "github actions",
     ],
     "Soft Skills": [
-        "communication", "leadership", "project management", "agile",
-        "scrum", "problem solving", "technical writing",
+        "communication",
+        "leadership",
+        "project management",
+        "agile",
+        "scrum",
+        "problem solving",
+        "technical writing",
     ],
 }
 
@@ -131,8 +173,11 @@ class GroqCategorizer(SkillCategorizerInterface):
 
     def __init__(self) -> None:
         from groq import Groq
+
         api_key = _get_api_key()
-        logger.info("Initializing GroqCategorizer with key: %s...", api_key[:8] if api_key else "NONE")
+        logger.info(
+            "Initializing GroqCategorizer with key: %s...", api_key[:8] if api_key else "NONE"
+        )
         self._client = Groq(
             api_key=api_key,
             timeout=self.TIMEOUT,

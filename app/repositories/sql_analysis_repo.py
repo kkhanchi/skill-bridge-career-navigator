@@ -42,9 +42,7 @@ class SqlAlchemyAnalysisRepository:
 
     # ---- Phase 3 multi-tenant methods ----------------------------------
 
-    def _create_impl(
-        self, user_id: str, record: AnalysisRecord
-    ) -> AnalysisRecord:
+    def _create_impl(self, user_id: str, record: AnalysisRecord) -> AnalysisRecord:
         """Shared insert path used by ``create_for_user``.
 
         Centralising the mapper call + ``user_id`` stamp here keeps
@@ -58,14 +56,10 @@ class SqlAlchemyAnalysisRepository:
         session.flush()
         return analysis_record_from_row(row)
 
-    def create_for_user(
-        self, user_id: str, record: AnalysisRecord
-    ) -> AnalysisRecord:
+    def create_for_user(self, user_id: str, record: AnalysisRecord) -> AnalysisRecord:
         return self._create_impl(user_id, record)
 
-    def get_for_user(
-        self, analysis_id: str, user_id: str
-    ) -> AnalysisRecord | None:
+    def get_for_user(self, analysis_id: str, user_id: str) -> AnalysisRecord | None:
         """Fetch only if owned by ``user_id``.
 
         Anti-enumeration (R12.7): wrong-owner rows are invisible in
@@ -74,8 +68,7 @@ class SqlAlchemyAnalysisRepository:
         session = get_db_session()
         row = session.scalar(
             select(AnalysisORM).where(
-                (AnalysisORM.id == analysis_id)
-                & (AnalysisORM.user_id == user_id)
+                (AnalysisORM.id == analysis_id) & (AnalysisORM.user_id == user_id)
             )
         )
         return analysis_record_from_row(row) if row is not None else None
